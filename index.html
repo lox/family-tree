@@ -13,6 +13,14 @@
         <h1>Family tree</h1>
       </div>
       <div class="header-actions">
+        <button class="search-trigger" id="person-search-trigger" type="button" aria-haspopup="dialog" aria-controls="person-search-dialog" aria-keyshortcuts="Meta+K Control+K" aria-label="Find a person">
+          <svg class="control-icon" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="8.5" cy="8.5" r="5.25"/>
+            <path d="m12.5 12.5 4 4"/>
+          </svg>
+          <span>Find</span>
+          <kbd>⌘K</kbd>
+        </button>
         <div class="settings-control">
           <button class="settings-trigger" id="settings-trigger" type="button" aria-expanded="false" aria-controls="settings-popover" aria-haspopup="dialog">
             <svg class="control-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -61,6 +69,24 @@
       </details>
       <p class="privacy-note">Select a person to trace their relationship path. · GED files stay in this browser.</p>
     </div>
+    <dialog class="person-search-dialog" id="person-search-dialog" aria-labelledby="person-search-title">
+      <section class="person-search-panel">
+        <h2 class="visually-hidden" id="person-search-title">Find a person</h2>
+        <div class="person-search-input-row">
+          <svg class="person-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+            <circle cx="8.5" cy="8.5" r="5.25"/>
+            <path d="m12.5 12.5 4 4"/>
+          </svg>
+          <input id="person-search-input" type="search" placeholder="Find a person…" autocomplete="off" spellcheck="false" aria-controls="person-search-results" aria-autocomplete="list">
+          <button class="person-search-close" id="person-search-close" type="button" aria-label="Close search">Esc</button>
+        </div>
+        <div class="person-search-results" id="person-search-results" role="listbox" aria-label="People"></div>
+        <footer class="person-search-footer">
+          <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
+          <span><kbd>↵</kbd> Select</span>
+        </footer>
+      </section>
+    </dialog>
     <div class="tree-workspace" id="tree-workspace" data-dock="right">
       <div class="tree-scroll">
         <p class="error-message" id="error-message" role="alert" hidden></p>

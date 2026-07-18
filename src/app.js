@@ -4,7 +4,6 @@ import { cardNameBaselines, formatCardName } from './name-format.js';
 import {
   ancestralEndpointIds,
   computeRelationshipPath,
-  selectionAfterTreeClick,
   toggleConnectionSelection
 } from './presentation-state.js';
 import sampleGedcom from './sample.ged?raw';
@@ -25,6 +24,11 @@ import {
   serializePresentationSettings,
   updatePresentationSettings
 } from './presentation-settings.js';
+import {
+  createPersonHistoryState,
+  personIdFromHistoryState
+} from './navigation-state.js';
+import { createPersonSearchDialog } from './person-search.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = document.querySelector('#family-tree');
@@ -44,6 +48,11 @@ const cardScaleOutput = document.querySelector('#setting-card-scale-value');
 const importReport = document.querySelector('#import-report');
 const importReportSummary = document.querySelector('#import-report-summary');
 const importReportCard = document.querySelector('#import-report-card');
+const searchTrigger = document.querySelector('#person-search-trigger');
+const searchDialog = document.querySelector('#person-search-dialog');
+const searchInput = document.querySelector('#person-search-input');
+const searchResults = document.querySelector('#person-search-results');
+const searchClose = document.querySelector('#person-search-close');
 
 function loadPresentationSettings() {
   try {
@@ -58,6 +67,8 @@ function loadPresentationSettings() {
 let graph = parseGedcom(sampleGedcom);
 let importLabel = 'Kennedy sample';
 let selectedPersonId = 'I4';
+let activeTreeId = crypto.randomUUID();
+let recentPersonIds = selectedPersonId ? [selectedPersonId] : [];
 let emphasizedConnectionKeys = new Set();
 let inspectorState = createInspectorState({
   dock: defaultInspectorDock(window.innerWidth),
@@ -68,6 +79,44 @@ let lastWidth = 0;
 let scheduled = false;
 let activeResizePointerId = null;
 let suppressTreeClickUntil = 0;
+
+function updateHistory(personId, mode) {
+  if (mode === 'none') return;
+  const method = mode === 'replace' ? 'replaceState' : 'pushState';
+  window.history[method](createPersonHistoryState(activeTreeId, personId), '');
+}
+
+function revealPersonCard(personId, focus = true) {
+  if (!personId) return;
+  requestAnimationFrame(() => {
+    const link = [...svg.querySelectorAll('.person-link')]
+      .find(candidate => candidate.dataset.personId === personId);
+    if (!link) return;
+    link.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    if (focus) link.focus({ preventScroll: true });
+  });
+}
+
+function selectPerson(personId, {
+  historyMode = 'push',
+  reveal = false,
+  focus = true,
+  closeInspector = false
+} = {}) {
+  const nextPersonId = personId && graph.people[personId] ? personId : '';
+  const selectionChanged = nextPersonId !== selectedPersonId;
+  const inspectorWasOpen = inspectorState.open;
+  selectedPersonId = nextPersonId;
+  inspectorState = updateInspectorState(inspectorState, {
+    type: closeInspector ? 'close' : nextPersonId ? 'open' : 'deselect-person'
+  });
+  if (nextPersonId) {
+    recentPersonIds = [nextPersonId, ...recentPersonIds.filter(id => id !== nextPersonId)].slice(0, 8);
+  }
+  if (selectionChanged) updateHistory(nextPersonId, historyMode);
+  if (selectionChanged || inspectorWasOpen !== inspectorState.open) renderTree();
+  if (reveal) revealPersonCard(nextPersonId, focus);
+}
 
 const svgElement = (tag, attributes = {}, text = '') => {
   const element = document.createElementNS(NS, tag);
@@ -226,6 +275,9 @@ function renderInspector(personId) {
     graph,
     personId,
     dock: inspectorState.dock,
+    onSelectPerson: personIdToSelect => {
+      selectPerson(personIdToSelect, { reveal: true });
+    },
     onDock: () => {
       inspectorState = updateInspectorState(inspectorState, { type: 'toggle-dock' });
       const sizeKey = inspectorState.dock === 'right' ? 'rightSize' : 'bottomSize';
@@ -236,9 +288,7 @@ function renderInspector(personId) {
       renderInspector(selectedPersonId);
     },
     onClose: () => {
-      selectedPersonId = '';
-      inspectorState = updateInspectorState(inspectorState, { type: 'close' });
-      renderTree();
+      selectPerson('', { closeInspector: true });
     }
   });
 }
@@ -529,6 +579,18 @@ function scheduleRender() {
   requestAnimationFrame(renderTree);
 }
 
+const personSearch = createPersonSearchDialog({
+  dialog: searchDialog,
+  trigger: searchTrigger,
+  input: searchInput,
+  resultsElement: searchResults,
+  closeButton: searchClose,
+  getPeople: () => graph.people,
+  getRecentIds: () => recentPersonIds,
+  onOpen: () => setSettingsOpen(false),
+  onSelect: personId => selectPerson(personId, { reveal: true })
+});
+
 svg.addEventListener('click', event => {
   if (performance.now() < suppressTreeClickUntil) return;
   const connection = event.target.closest('[data-connection-key]');
@@ -543,13 +605,7 @@ svg.addEventListener('click', event => {
   }
   const link = event.target.closest('.person-link');
   if (link) event.preventDefault();
-  const nextSelection = selectionAfterTreeClick(link?.dataset.personId);
-  if (nextSelection === selectedPersonId) return;
-  selectedPersonId = nextSelection;
-  inspectorState = updateInspectorState(inspectorState, {
-    type: selectedPersonId ? 'open' : 'deselect-person'
-  });
-  renderTree();
+  selectPerson(link?.dataset.personId ?? '', { focus: false });
 });
 
 settingsTrigger.addEventListener('click', event => {
@@ -588,7 +644,11 @@ fileInput.addEventListener('change', async () => {
     graph = parseGedcom(await file.text());
     importLabel = file.name;
     selectedPersonId = '';
+    activeTreeId = crypto.randomUUID();
+    recentPersonIds = [];
     emphasizedConnectionKeys = new Set();
+    inspectorState = updateInspectorState(inspectorState, { type: 'deselect-person' });
+    updateHistory('', 'replace');
     renderImportReport();
     renderTree();
   } catch (error) {
@@ -669,15 +729,29 @@ paneResizer.addEventListener('keydown', event => {
 });
 
 document.addEventListener('keydown', event => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k') {
+    event.preventDefault();
+    personSearch.open();
+    return;
+  }
   if (event.key !== 'Escape') return;
+  if (personSearch.isOpen()) {
+    event.preventDefault();
+    personSearch.close({ restoreFocus: true });
+    return;
+  }
   if (!settingsPopover.hidden) {
     setSettingsOpen(false);
     settingsTrigger.focus();
     return;
   }
   if (!selectedPersonId) return;
-  selectedPersonId = '';
-  renderTree();
+  selectPerson('');
+});
+
+window.addEventListener('popstate', event => {
+  const personId = personIdFromHistoryState(event.state, activeTreeId, graph.people);
+  selectPerson(personId, { historyMode: 'none', reveal: Boolean(personId) });
 });
 
 window.addEventListener('resize', () => {
@@ -695,3 +769,4 @@ window.addEventListener('resize', () => {
 renderSettings();
 renderImportReport();
 renderTree();
+updateHistory(selectedPersonId, 'replace');

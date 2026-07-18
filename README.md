@@ -13,6 +13,8 @@ Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundle
 
 After a file opens, its import report shows the detected GEDCOM version and producer, record counts, malformed lines, unsupported tags, skipped duplicate records, and family links to missing people. Valid records still open when the file contains recoverable problems. The parser has compatibility fixtures for GEDCOM 5.5.1 Reunion exports and GEDCOM 7 partner records.
 
+Use **Find** or press <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> to search the open tree by name, alias, place, date, or occupation. Selecting a relationship in Person Details moves to that person. Browser Back and Forward step through person selections without putting private GEDCOM identifiers in the URL.
+
 ## Test
 
 ```sh
@@ -41,6 +43,8 @@ fly deploy
 - `src/layout-engine.js` is a pure, DOM-independent forest projection and packing engine.
 - `src/connection-router.js` bundles one-to-many relationships, allocates obstacle-free channels, and emits trunks, rails, drops, junctions, or paired continuation portals.
 - `src/presentation-state.js` computes the selected person's relationship path without coupling color semantics to the layout engine.
+- `src/person-search.js` owns person matching and the keyboard-driven search dialog.
+- `src/navigation-state.js` scopes browser history entries to the GEDCOM currently held in memory.
 - `src/details-pane.js` owns the DOM presentation of a selected person's facts, events, relationships, notes, sources, media, and record metadata behind one rendering interface.
 - `src/app.js` composes the layout, SVG renderer, details pane, selection, resizing, settings, and file loading.
 - `src/sample.ged` is the default demonstration file and goes through the same parser as an opened GEDCOM.
