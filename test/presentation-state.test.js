@@ -46,15 +46,31 @@ test('identifies partnered people with no recorded parent family as ancestral en
   assert.deepEqual([...ancestralEndpointIds(endpointProjection)].sort(), ['B', 'D', 'E', 'X', 'Y']);
 });
 
-test('keeps the tree neutral when a starting-family person is selected', () => {
+test('focuses a starting-family person, their partner, and direct children', () => {
   const state = computeRelationshipPath(projection, 'A');
 
-  assert.equal(state.active, false);
-  assert.deepEqual([...state.personIds], ['A']);
+  assert.equal(state.active, true);
+  assert.deepEqual([...state.personIds], ['A', 'B', 'C']);
   assert.deepEqual([...state.unitIds], ['root:F0']);
   assert.deepEqual([...state.familyIds], ['F0']);
   assert.deepEqual([...state.unionFamilyIds], ['F0']);
   assert.deepEqual([...state.parentageFamilyIds], []);
+  assert.deepEqual([...state.directChildFamilyIds], ['F0']);
+  assert.deepEqual([...state.directChildEdgeIds], ['F0:C']);
+  assert.deepEqual([...state.directChildPersonIds], ['C']);
+});
+
+test('focuses only immediate children while retaining the ancestor path', () => {
+  const state = computeRelationshipPath(projection, 'C');
+
+  assert.equal(state.active, true);
+  assert.deepEqual([...state.directChildFamilyIds], ['F1', 'F2']);
+  assert.deepEqual([...state.directChildEdgeIds], ['F1:L', 'F2:M']);
+  assert.deepEqual([...state.directChildPersonIds], ['L', 'M']);
+  assert.ok(state.personIds.has('L'));
+  assert.ok(state.personIds.has('M'));
+  assert.ok(state.personIds.has('A'));
+  assert.ok(state.personIds.has('B'));
 });
 
 test('highlights only the relationship path to a selected descendant', () => {
@@ -86,7 +102,9 @@ test('traces a selected non-anchor partner through their own parents', () => {
   assert.deepEqual([...state.unionFamilyIds], ['F1', 'F3']);
   assert.deepEqual([...state.parentageFamilyIds], ['F3']);
   assert.deepEqual([...state.parentageEdgeIds], ['F3:D']);
-  assert.deepEqual([...state.personIds], ['D', 'C', 'X', 'Y']);
+  assert.deepEqual([...state.personIds], ['D', 'C', 'L', 'X', 'Y']);
+  assert.deepEqual([...state.directChildPersonIds], ['L']);
+  assert.deepEqual([...state.directChildFamilyIds], ['F1']);
   assert.ok(!state.personIds.has('A'));
   assert.ok(!state.personIds.has('B'));
   assert.ok(!state.personIds.has('E'));
