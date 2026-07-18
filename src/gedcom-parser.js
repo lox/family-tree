@@ -25,6 +25,23 @@ const familyFactLabels = {
   ANUL: 'Annulment'
 };
 
+const recognizedTags = new Set([
+  'HEAD', 'TRLR', 'INDI', 'FAM', 'SOUR', 'NOTE', 'REPO', 'OBJE', 'SUBM', 'SUBN',
+  'GEDC', 'VERS', 'CHAR', 'LANG', 'DEST', 'DATE', 'TIME', 'CORP', 'ADDR', 'PHON',
+  'EMAIL', 'WWW', 'NAME', 'NSFX', 'SEX', 'ALIA', 'TITL', 'HUSB', 'WIFE', 'PART',
+  'CHIL', 'FAMC', 'FAMS', 'FILE', 'FORM', 'TYPE', 'PERI', 'PUBL', 'AUTH', 'TEXT',
+  'URL', 'PLAC', 'MEDI', 'PAGE', 'CONT', 'CONC', '_TYPE', '_PRIM', '_UID', 'CHAN',
+  ...Object.keys(factLabels),
+  ...Object.keys(familyFactLabels)
+]);
+const supportedGedcomVersions = new Set(['5.5', '5.5.1', '7.0']);
+const recordTags = new Set(['SOUR', 'NOTE', 'INDI', 'FAM']);
+const diagnosticDetailLimit = 12;
+
+const plural = (count, singular, pluralForm = `${singular}s`) => (
+  count === 1 ? singular : pluralForm
+);
+
 const children = (node, tag) => node.children.filter(child => child.tag === tag);
 const childValue = (node, tag) => children(node, tag)[0]?.value ?? '';
 
@@ -42,10 +59,16 @@ function nodeText(node) {
 function parseTree(source) {
   const roots = [];
   const stack = [];
-  for (const rawLine of source.replace(/\r\n?/g, '\n').split('\n')) {
+  const malformedLines = [];
+  const lines = source.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
+  for (const [index, rawLine] of lines.entries()) {
     const line = rawLine.trimEnd();
+    if (!line.trim()) continue;
     const match = line.match(/^(\d+)\s+(?:(@[^@]+@)\s+)?(\S+)(?:\s+(.*))?$/);
-    if (!match) continue;
+    if (!match) {
+      malformedLines.push(`Line ${index + 1}: ${line.trim()}`);
+      continue;
+    }
     const node = {
       level: Number(match[1]),
       xref: match[2] ? cleanRef(match[2]) : '',
@@ -58,7 +81,133 @@ function parseTree(source) {
     else roots.push(node);
     stack.push(node);
   }
-  return roots;
+  return { roots, malformedLines };
+}
+
+function unsupportedTagCounts(roots) {
+  const counts = new Map();
+  const visit = node => {
+    if (!recognizedTags.has(node.tag)) {
+      counts.set(node.tag, (counts.get(node.tag) ?? 0) + 1);
+      return;
+    }
+    node.children.forEach(visit);
+  };
+  roots.forEach(visit);
+  return [...counts.entries()].sort(([left], [right]) => left.localeCompare(right));
+}
+
+function collectRecords(roots, diagnostics) {
+  const records = Object.fromEntries([...recordTags].map(tag => [tag, []]));
+  const seen = new Map();
+  roots.filter(node => recordTags.has(node.tag)).forEach(node => {
+    if (!node.xref) {
+      diagnostics.missingIdentifiers.push(node.tag);
+      return;
+    }
+    if (seen.has(node.xref)) {
+      diagnostics.duplicateIdentifiers.push(
+        `${node.tag} ${node.xref} duplicates ${seen.get(node.xref)}`
+      );
+      return;
+    }
+    seen.set(node.xref, node.tag);
+    records[node.tag].push(node);
+  });
+  return records;
+}
+
+function warning(code, count, message, details) {
+  const visibleDetails = details.slice(0, diagnosticDetailLimit);
+  if (details.length > diagnosticDetailLimit) {
+    visibleDetails.push(`… ${details.length - diagnosticDetailLimit} more`);
+  }
+  return { code, count, message, details: visibleDetails };
+}
+
+function buildDiagnostics({ roots, malformedLines, people, families, sourceRecords, tracking }) {
+  const header = roots.find(node => node.tag === 'HEAD');
+  const gedcom = header ? children(header, 'GEDC')[0] : null;
+  const version = gedcom ? childValue(gedcom, 'VERS') : '';
+  const unsupportedTags = unsupportedTagCounts(roots);
+  const missingReferences = [];
+  families.forEach(family => {
+    family.partners.forEach(personId => {
+      if (!people[personId]) missingReferences.push(`${family.id} partner: ${personId}`);
+    });
+    family.children.forEach(personId => {
+      if (!people[personId]) missingReferences.push(`${family.id} child: ${personId}`);
+    });
+  });
+
+  const warnings = [];
+  if (!supportedGedcomVersions.has(version)) {
+    warnings.push(warning(
+      'unsupported-version',
+      1,
+      version
+        ? `GEDCOM ${version} is not a tested format.`
+        : 'The GEDCOM version is missing.',
+      ['Tested formats: 5.5, 5.5.1, and 7.0']
+    ));
+  }
+  if (malformedLines.length) {
+    warnings.push(warning(
+      'malformed-lines',
+      malformedLines.length,
+      `${malformedLines.length} ${plural(malformedLines.length, 'line')} could not be read as GEDCOM.`,
+      malformedLines
+    ));
+  }
+  if (unsupportedTags.length) {
+    const count = unsupportedTags.reduce((total, [, occurrences]) => total + occurrences, 0);
+    warnings.push(warning(
+      'unsupported-tags',
+      count,
+      `${count} ${plural(count, 'tag')} ${count === 1 ? 'is' : 'are'} not displayed.`,
+      unsupportedTags.map(([tag, occurrences]) => `${tag} (${occurrences})`)
+    ));
+  }
+  if (tracking.missingIdentifiers.length) {
+    const count = tracking.missingIdentifiers.length;
+    warnings.push(warning(
+      'missing-record-identifiers',
+      count,
+      `${count} ${plural(count, 'record')} without an identifier was skipped.`,
+      tracking.missingIdentifiers.map(tag => `${tag} record`)
+    ));
+  }
+  if (tracking.duplicateIdentifiers.length) {
+    const count = tracking.duplicateIdentifiers.length;
+    warnings.push(warning(
+      'duplicate-record-identifiers',
+      count,
+      `${count} duplicate ${plural(count, 'record identifier')} was skipped.`,
+      tracking.duplicateIdentifiers
+    ));
+  }
+  if (missingReferences.length) {
+    const count = missingReferences.length;
+    warnings.push(warning(
+      'missing-person-references',
+      count,
+      `${count} family ${plural(count, 'link')} ${count === 1 ? 'points' : 'point'} to ${plural(count, 'a person that is', 'people that are')} not in the file.`,
+      missingReferences
+    ));
+  }
+
+  return {
+    format: {
+      version,
+      producer: header ? childValue(header, 'SOUR') : ''
+    },
+    counts: {
+      people: Object.keys(people).length,
+      families: families.length,
+      sources: Object.keys(sourceRecords).length
+    },
+    warnings
+  };
 }
 
 function parseSourceRecord(node) {
@@ -227,26 +376,45 @@ function parseFamily(node, resolvers) {
 
 export function parseGedcom(source) {
   if (typeof source !== 'string') throw new TypeError('GEDCOM source must be text');
-  const roots = parseTree(source);
+  const { roots, malformedLines } = parseTree(source);
+  const tracking = { missingIdentifiers: [], duplicateIdentifiers: [] };
+  const records = collectRecords(roots, tracking);
+  const sourceNodes = records.SOUR;
+  const noteNodes = records.NOTE;
+  const personNodes = records.INDI;
+  const familyNodes = records.FAM;
   const sourceRecords = Object.fromEntries(
-    roots.filter(node => node.tag === 'SOUR' && node.xref).map(node => [node.xref, parseSourceRecord(node)])
+    sourceNodes.map(node => [node.xref, parseSourceRecord(node)])
   );
   const noteRecords = {};
-  roots.filter(node => node.tag === 'NOTE' && node.xref).forEach(node => {
+  noteNodes.forEach(node => {
     noteRecords[node.xref] = { id: node.xref, text: nodeText(node), sources: [] };
   });
   const initialResolvers = createResolvers(noteRecords, sourceRecords);
-  roots.filter(node => node.tag === 'NOTE' && node.xref).forEach(node => {
+  noteNodes.forEach(node => {
     noteRecords[node.xref].sources = initialResolvers.citationsFor(node);
   });
   const resolvers = createResolvers(noteRecords, sourceRecords);
   const people = Object.fromEntries(
-    roots.filter(node => node.tag === 'INDI').map(node => [node.xref, parsePerson(node, resolvers)])
+    personNodes.map(node => [node.xref, parsePerson(node, resolvers)])
   );
-  const families = roots.filter(node => node.tag === 'FAM').map(node => parseFamily(node, resolvers));
+  const families = familyNodes.map(node => parseFamily(node, resolvers));
 
   if (!Object.keys(people).length && !families.length) {
     throw new Error('GEDCOM contains no individual or family records');
   }
-  return { people, families, sources: sourceRecords };
+  const diagnostics = buildDiagnostics({
+    roots,
+    malformedLines,
+    people,
+    families,
+    sourceRecords,
+    tracking
+  });
+  const normalizedFamilies = families.map(family => ({
+    ...family,
+    partners: family.partners.filter(personId => people[personId]),
+    children: family.children.filter(personId => people[personId])
+  }));
+  return { people, families: normalizedFamilies, sources: sourceRecords, diagnostics };
 }

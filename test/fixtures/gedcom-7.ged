@@ -1,0 +1,16 @@
+0 HEAD
+1 SOUR Compatible exporter
+1 GEDC
+2 VERS 7.0
+1 CHAR UTF-8
+0 @I1@ INDI
+1 NAME Alex /RIVERA/
+0 @I2@ INDI
+1 NAME Jordan /KIM/
+0 @I3@ INDI
+1 NAME Casey /RIVERA-KIM/
+0 @F1@ FAM
+1 PART @I1@
+1 PART @I2@
+1 CHIL @I3@
+0 TRLR

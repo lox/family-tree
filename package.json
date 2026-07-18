@@ -10,7 +10,8 @@
     "dev": "vite --host 127.0.0.1 --port 4173",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test": "node --test"
+    "test": "node --test",
+    "benchmark": "node scripts/benchmark-layout.js"
   },
   "devDependencies": {
     "vite": "8.1.5"

@@ -158,3 +158,134 @@ test('retains and resolves rich person facts, notes, citations, and media', () =
 test('fails clearly when a file has no GEDCOM individual or family records', () => {
   assert.throws(() => parseGedcom('0 HEAD\n0 TRLR'), /no individual or family records/i);
 });
+
+test('reports GEDCOM version, ignored tags, malformed lines, and broken family references', () => {
+  const ged = [
+    '0 HEAD',
+    '1 SOUR Reunion',
+    '1 GEDC',
+    '2 VERS 5.5.1',
+    '0 @I1@ INDI',
+    '1 NAME Ada /LOVELACE/',
+    '1 _PRIVATE Y',
+    'this is not GEDCOM',
+    '0 @F1@ FAM',
+    '1 PART @I1@',
+    '1 PART @I404@',
+    '1 CHIL @I405@',
+    '0 TRLR'
+  ].join('\n');
+
+  const graph = parseGedcom(ged);
+
+  assert.deepEqual(graph.diagnostics.format, {
+    version: '5.5.1',
+    producer: 'Reunion'
+  });
+  assert.deepEqual(graph.diagnostics.counts, {
+    people: 1,
+    families: 1,
+    sources: 0
+  });
+  assert.deepEqual(graph.diagnostics.warnings, [
+    {
+      code: 'malformed-lines',
+      count: 1,
+      message: '1 line could not be read as GEDCOM.',
+      details: ['Line 8: this is not GEDCOM']
+    },
+    {
+      code: 'unsupported-tags',
+      count: 1,
+      message: '1 tag is not displayed.',
+      details: ['_PRIVATE (1)']
+    },
+    {
+      code: 'missing-person-references',
+      count: 2,
+      message: '2 family links point to people that are not in the file.',
+      details: ['F1 partner: I404', 'F1 child: I405']
+    }
+  ]);
+});
+
+test('reports duplicate and missing record identifiers without replacing valid people', () => {
+  const ged = [
+    '0 HEAD',
+    '1 GEDC',
+    '2 VERS 7.0',
+    '0 @I1@ INDI',
+    '1 NAME First /PERSON/',
+    '0 @I1@ INDI',
+    '1 NAME Replacement /PERSON/',
+    '0 INDI',
+    '1 NAME Missing /IDENTIFIER/',
+    '0 TRLR'
+  ].join('\n');
+
+  const graph = parseGedcom(ged);
+
+  assert.equal(graph.people.I1.name, 'First PERSON');
+  assert.deepEqual(graph.diagnostics.warnings.map(warning => warning.code), [
+    'missing-record-identifiers',
+    'duplicate-record-identifiers'
+  ]);
+});
+
+test('warns when the declared GEDCOM version has not been tested', () => {
+  const graph = parseGedcom([
+    '0 HEAD',
+    '1 GEDC',
+    '2 VERS 4.0',
+    '0 @I1@ INDI',
+    '1 NAME Old /FORMAT/',
+    '0 TRLR'
+  ].join('\n'));
+
+  assert.deepEqual(graph.diagnostics.warnings, [{
+    code: 'unsupported-version',
+    count: 1,
+    message: 'GEDCOM 4.0 is not a tested format.',
+    details: ['Tested formats: 5.5, 5.5.1, and 7.0']
+  }]);
+});
+
+test('treats record identifiers as file-wide and keeps the first record', () => {
+  const graph = parseGedcom([
+    '0 HEAD',
+    '1 GEDC',
+    '2 VERS 5.5.1',
+    '0 @SHARED@ INDI',
+    '1 NAME First /RECORD/',
+    '0 @SHARED@ SOUR',
+    '1 TITL Conflicting source',
+    '0 TRLR'
+  ].join('\n'));
+
+  assert.equal(graph.people.SHARED.name, 'First RECORD');
+  assert.deepEqual(graph.sources, {});
+  assert.deepEqual(graph.diagnostics.warnings, [{
+    code: 'duplicate-record-identifiers',
+    count: 1,
+    message: '1 duplicate record identifier was skipped.',
+    details: ['SOUR SHARED duplicates INDI']
+  }]);
+});
+
+test('caps diagnostic evidence while retaining the full issue count', () => {
+  const damagedLines = Array.from({ length: 20 }, (_, index) => `damaged line ${index + 1}`);
+  const graph = parseGedcom([
+    '0 HEAD',
+    '1 GEDC',
+    '2 VERS 5.5.1',
+    '0 @I1@ INDI',
+    '1 NAME Usable /PERSON/',
+    ...damagedLines,
+    '0 TRLR'
+  ].join('\n'));
+  const warning = graph.diagnostics.warnings[0];
+
+  assert.equal(warning.count, 20);
+  assert.equal(warning.details.length, 13);
+  assert.equal(warning.details.at(-1), '… 8 more');
+});

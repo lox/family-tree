@@ -7,7 +7,7 @@ import {
   selectionAfterTreeClick,
   toggleConnectionSelection
 } from './presentation-state.js';
-import { sampleGraph } from './sample-data.js';
+import sampleGedcom from './sample.ged?raw';
 import { buildUnionPresentation } from './union-presentation.js';
 import { relationshipPeriod } from './relationship-period.js';
 import {
@@ -17,6 +17,7 @@ import {
 } from './inspector-state.js';
 import { generationLaneBounds } from './lane-presentation.js';
 import { renderDetailsPane } from './details-pane.js';
+import { buildImportReport } from './import-report.js';
 import {
   PRESENTATION_SETTINGS_KEY,
   createPresentationSettings,
@@ -40,6 +41,9 @@ const sexColorsInput = document.querySelector('#setting-sex-colors');
 const sexColourKey = document.querySelector('#sex-colour-key');
 const cardScaleInput = document.querySelector('#setting-card-scale');
 const cardScaleOutput = document.querySelector('#setting-card-scale-value');
+const importReport = document.querySelector('#import-report');
+const importReportSummary = document.querySelector('#import-report-summary');
+const importReportCard = document.querySelector('#import-report-card');
 
 function loadPresentationSettings() {
   try {
@@ -51,7 +55,8 @@ function loadPresentationSettings() {
   }
 }
 
-let graph = sampleGraph;
+let graph = parseGedcom(sampleGedcom);
+let importLabel = 'Kennedy sample';
 let selectedPersonId = 'I4';
 let emphasizedConnectionKeys = new Set();
 let inspectorState = createInspectorState({
@@ -107,6 +112,37 @@ function savePresentationSettings() {
   } catch (error) {
     console.warn('Presentation settings changed but could not be saved in this browser.', error);
   }
+}
+
+function renderImportReport() {
+  const report = buildImportReport(importLabel, graph.diagnostics);
+  importReport.dataset.hasWarnings = String(Boolean(report.warnings.length));
+  importReportSummary.textContent = `${report.label} · ${report.status}`;
+
+  const heading = document.createElement('strong');
+  heading.textContent = report.label;
+  const status = document.createElement('span');
+  status.className = 'import-report-status';
+  status.textContent = report.status;
+  const metadata = document.createElement('p');
+  metadata.textContent = report.metadata;
+  importReportCard.replaceChildren(heading, status, metadata);
+
+  if (!report.warnings.length) return;
+  const warningList = document.createElement('ul');
+  report.warnings.forEach(item => {
+    const listItem = document.createElement('li');
+    const message = document.createElement('strong');
+    message.textContent = item.message;
+    listItem.append(message);
+    if (item.details.length) {
+      const details = document.createElement('span');
+      details.textContent = item.details.join(' · ');
+      listItem.append(details);
+    }
+    warningList.append(listItem);
+  });
+  importReportCard.append(warningList);
 }
 
 function roundedPath(points, radius = 8) {
@@ -550,8 +586,10 @@ fileInput.addEventListener('change', async () => {
   if (!file) return;
   try {
     graph = parseGedcom(await file.text());
+    importLabel = file.name;
     selectedPersonId = '';
     emphasizedConnectionKeys = new Set();
+    renderImportReport();
     renderTree();
   } catch (error) {
     errorMessage.textContent = `Could not open ${file.name}: ${error.message}`;
@@ -655,4 +693,5 @@ window.addEventListener('resize', () => {
 });
 
 renderSettings();
+renderImportReport();
 renderTree();
