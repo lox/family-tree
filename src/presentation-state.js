@@ -25,6 +25,9 @@ export function computeRelationshipPath(projection, selectedPersonId) {
   const unionFamilyIds = new Set();
   const parentageFamilyIds = new Set();
   const parentageEdgeIds = new Set();
+  const directChildFamilyIds = new Set();
+  const directChildEdgeIds = new Set();
+  const directChildPersonIds = new Set();
   const selectedUnit = projection.units.find(unit => unit.personIds.includes(selectedPersonId));
   const state = active => ({
     active,
@@ -33,7 +36,10 @@ export function computeRelationshipPath(projection, selectedPersonId) {
     familyIds,
     unionFamilyIds,
     parentageFamilyIds,
-    parentageEdgeIds
+    parentageEdgeIds,
+    directChildFamilyIds,
+    directChildEdgeIds,
+    directChildPersonIds
   });
 
   if (!selectedUnit) return state(false);
@@ -52,9 +58,16 @@ export function computeRelationshipPath(projection, selectedPersonId) {
   selectedFamilies.forEach(family => {
     familyIds.add(family.id);
     unionFamilyIds.add(family.id);
-    if (!selectingRootUnit) {
-      family.partners.forEach(personId => personIds.add(personId));
-    }
+    family.partners.forEach(personId => personIds.add(personId));
+    if (family.children.length) directChildFamilyIds.add(family.id);
+    family.children.forEach(personId => {
+      directChildPersonIds.add(personId);
+      personIds.add(personId);
+    });
+  });
+
+  projection.parentage.forEach(edge => {
+    if (directChildFamilyIds.has(edge.sourceFamilyId)) directChildEdgeIds.add(edge.id);
   });
 
   const incomingByChild = new Map();
@@ -86,5 +99,5 @@ export function computeRelationshipPath(projection, selectedPersonId) {
     });
   }
 
-  return state(!selectingRootUnit || parentageEdgeIds.size > 0);
+  return state(!selectingRootUnit || parentageEdgeIds.size > 0 || directChildEdgeIds.size > 0);
 }

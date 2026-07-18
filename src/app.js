@@ -29,6 +29,12 @@ import {
   personIdFromHistoryState
 } from './navigation-state.js';
 import { createPersonSearchDialog } from './person-search.js';
+import {
+  applyRelationshipFilter,
+  createRelationshipFilter
+} from './relationship-filter.js';
+import { createRelationshipFilterControl } from './relationship-filter-control.js';
+import { personClickIntent } from './person-click-intent.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = document.querySelector('#family-tree');
@@ -67,6 +73,7 @@ function loadPresentationSettings() {
 let graph = parseGedcom(sampleGedcom);
 let importLabel = 'Kennedy sample';
 let selectedPersonId = 'I4';
+let relationshipFilter = createRelationshipFilter();
 let activeTreeId = crypto.randomUUID();
 let recentPersonIds = selectedPersonId ? [selectedPersonId] : [];
 let emphasizedConnectionKeys = new Set();
@@ -79,6 +86,28 @@ let lastWidth = 0;
 let scheduled = false;
 let activeResizePointerId = null;
 let suppressTreeClickUntil = 0;
+let pendingPersonClickTimer = null;
+
+function cancelPendingPersonClick() {
+  if (pendingPersonClickTimer === null) return;
+  window.clearTimeout(pendingPersonClickTimer);
+  pendingPersonClickTimer = null;
+}
+
+const relationshipFilterControl = createRelationshipFilterControl({
+  root: document,
+  workspace,
+  privacyNote: document.querySelector('.privacy-note'),
+  getPeople: () => graph.people,
+  getSelectedPersonId: () => selectedPersonId,
+  onChange: (nextFilter, { revealPersonId }) => {
+    relationshipFilter = nextFilter;
+    emphasizedConnectionKeys = new Set();
+    renderTree();
+    if (revealPersonId) revealPersonCard(revealPersonId, false);
+  },
+  onOpen: () => setSettingsOpen(false)
+});
 
 function updateHistory(personId, mode) {
   if (mode === 'none') return;
@@ -104,6 +133,10 @@ function selectPerson(personId, {
   closeInspector = false
 } = {}) {
   const nextPersonId = personId && graph.people[personId] ? personId : '';
+  const filteredGraph = applyRelationshipFilter(graph, relationshipFilter);
+  if (relationshipFilter.preset !== 'full' && nextPersonId && !filteredGraph.people[nextPersonId]) {
+    relationshipFilter = createRelationshipFilter();
+  }
   const selectionChanged = nextPersonId !== selectedPersonId;
   const inspectorWasOpen = inspectorState.open;
   selectedPersonId = nextPersonId;
@@ -297,9 +330,10 @@ function renderTree() {
   scheduled = false;
   errorMessage.hidden = true;
   const width = Math.max(240, Math.floor(stage.getBoundingClientRect().width));
+  const renderedGraph = applyRelationshipFilter(graph, relationshipFilter);
   let result;
   try {
-    result = buildFamilyLayout(graph, {
+    result = buildFamilyLayout(renderedGraph, {
       width,
       cardScale: presentationSettings.cardScale
     });
@@ -322,6 +356,9 @@ function renderTree() {
   const pathClass = isLineage => isLineage
     ? ' is-lineage'
     : relationshipPath.active ? ' is-context' : '';
+  const childPathClass = familyId => relationshipPath.directChildFamilyIds.has(familyId)
+    ? ' is-direct-child'
+    : pathClass(false);
 
   const title = svg.querySelector('title');
   const description = svg.querySelector('desc');
@@ -350,7 +387,7 @@ function renderTree() {
       : `M ${segment.points[0].x} ${segment.points[0].y} L ${segment.points[1].x} ${segment.points[1].y}`;
     appendInteractivePath({
       d: path,
-      class: `parentage-line parentage-${segment.kind}${pathClass(false)}${emphasisClass(connectionKey)}`,
+      class: `parentage-line parentage-${segment.kind}${childPathClass(segment.bundleId)}${emphasisClass(connectionKey)}`,
       'data-relationship': segment.relationship,
       'data-bundle-id': segment.bundleId
     }, connectionKey);
@@ -359,7 +396,7 @@ function renderTree() {
     const connectionKey = `child:${junction.bundleId}`;
     svg.append(svgElement('circle', {
       cx: junction.x, cy: junction.y, r: 2.5,
-      class: `parentage-junction${pathClass(false)}${emphasisClass(connectionKey)}`,
+      class: `parentage-junction${childPathClass(junction.bundleId)}${emphasisClass(connectionKey)}`,
       'data-bundle-id': junction.bundleId,
       'data-junction': 'child-split'
     }));
@@ -405,9 +442,12 @@ function renderTree() {
     if (edge.offspringPoints.length) {
       const childKey = `child:${edge.familyId}`;
       const isLineage = relationshipPath.parentageFamilyIds.has(edge.familyId);
+      const relationshipClass = isLineage
+        ? pathClass(true)
+        : childPathClass(edge.familyId);
       appendInteractivePath({
         d: roundedPath(edge.offspringPoints, 3),
-        class: `parentage-line offspring-origin${pathClass(isLineage)}${emphasisClass(childKey)}`,
+        class: `parentage-line offspring-origin${relationshipClass}${emphasisClass(childKey)}`,
         'data-family-id': edge.familyId
       }, childKey);
     }
@@ -466,9 +506,12 @@ function renderTree() {
       if (branch.edge.offspringPoints.length) {
         const childKey = `child:${branch.familyId}`;
         const isLineage = relationshipPath.parentageFamilyIds.has(branch.familyId);
+        const childRelationshipClass = isLineage
+          ? pathClass(true)
+          : childPathClass(branch.familyId);
         appendInteractivePath({
           d: roundedPath(branch.edge.offspringPoints, 3),
-          class: `parentage-line offspring-origin${pathClass(isLineage)}${emphasisClass(childKey)}`,
+          class: `parentage-line offspring-origin${childRelationshipClass}${emphasisClass(childKey)}`,
           'data-family-id': branch.familyId
         }, childKey);
       }
@@ -569,7 +612,9 @@ function renderTree() {
     });
   });
 
-  summary.textContent = `${visiblePeople.size} visible of ${Object.keys(graph.people).length} people · ${graph.families.length} families · ${generationGroups.size} generations`;
+  const familyCount = renderedGraph.families.length;
+  summary.textContent = `${visiblePeople.size} visible of ${Object.keys(graph.people).length} people · ${familyCount} ${familyCount === 1 ? 'family' : 'families'} · ${generationGroups.size} generations`;
+  relationshipFilterControl.render(relationshipFilter);
   renderInspector(selectedPersonId);
 }
 
@@ -587,7 +632,10 @@ const personSearch = createPersonSearchDialog({
   closeButton: searchClose,
   getPeople: () => graph.people,
   getRecentIds: () => recentPersonIds,
-  onOpen: () => setSettingsOpen(false),
+  onOpen: () => {
+    setSettingsOpen(false);
+    relationshipFilterControl.close();
+  },
   onSelect: personId => selectPerson(personId, { reveal: true })
 });
 
@@ -595,6 +643,7 @@ svg.addEventListener('click', event => {
   if (performance.now() < suppressTreeClickUntil) return;
   const connection = event.target.closest('[data-connection-key]');
   if (connection) {
+    cancelPendingPersonClick();
     event.preventDefault();
     emphasizedConnectionKeys = toggleConnectionSelection(
       emphasizedConnectionKeys,
@@ -604,12 +653,34 @@ svg.addEventListener('click', event => {
     return;
   }
   const link = event.target.closest('.person-link');
-  if (link) event.preventDefault();
-  selectPerson(link?.dataset.personId ?? '', { focus: false });
+  if (!link) {
+    cancelPendingPersonClick();
+    selectPerson('', { focus: false });
+    return;
+  }
+
+  event.preventDefault();
+  const personId = link.dataset.personId;
+  const intent = personClickIntent(event.detail);
+  cancelPendingPersonClick();
+  if (intent === 'open-family-branch') {
+    selectPerson(personId, { reveal: false, focus: false });
+    relationshipFilterControl.applyPreset('family', personId);
+    return;
+  }
+  if (intent === 'select') {
+    selectPerson(personId, { focus: false });
+    return;
+  }
+  pendingPersonClickTimer = window.setTimeout(() => {
+    pendingPersonClickTimer = null;
+    selectPerson(personId, { focus: false });
+  }, 240);
 });
 
 settingsTrigger.addEventListener('click', event => {
   event.stopPropagation();
+  relationshipFilterControl.close();
   setSettingsOpen(settingsPopover.hidden);
 });
 
@@ -635,7 +706,11 @@ cardScaleInput.addEventListener('input', () => {
   scheduleRender();
 });
 
-document.addEventListener('click', () => setSettingsOpen(false));
+document.addEventListener('click', event => {
+  if (!event.target.closest('.person-link')) cancelPendingPersonClick();
+  setSettingsOpen(false);
+  relationshipFilterControl.close();
+});
 
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
@@ -644,6 +719,7 @@ fileInput.addEventListener('change', async () => {
     graph = parseGedcom(await file.text());
     importLabel = file.name;
     selectedPersonId = '';
+    relationshipFilter = createRelationshipFilter();
     activeTreeId = crypto.randomUUID();
     recentPersonIds = [];
     emphasizedConnectionKeys = new Set();
@@ -743,6 +819,11 @@ document.addEventListener('keydown', event => {
   if (!settingsPopover.hidden) {
     setSettingsOpen(false);
     settingsTrigger.focus();
+    return;
+  }
+  if (relationshipFilterControl.isOpen()) {
+    relationshipFilterControl.close();
+    relationshipFilterControl.focus();
     return;
   }
   if (!selectedPersonId) return;

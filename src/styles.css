@@ -62,7 +62,8 @@ h1 {
 
 .file-control,
 .settings-trigger,
-.search-trigger {
+.search-trigger,
+.relationship-filter-trigger {
   min-height: 42px;
   border: 1px solid var(--border-strong);
   border-radius: 11px;
@@ -72,7 +73,8 @@ h1 {
 
 .file-control,
 .settings-trigger,
-.search-trigger {
+.search-trigger,
+.relationship-filter-trigger {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -87,12 +89,49 @@ h1 {
 .file-control:hover,
 .settings-trigger:hover,
 .settings-trigger[aria-expanded="true"],
-.search-trigger:hover { background: var(--surface-soft); }
+.search-trigger:hover,
+.relationship-filter-trigger:hover,
+.relationship-filter-trigger[aria-expanded="true"] { background: var(--surface-soft); }
 .file-control input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
 
 .settings-control { position: relative; }
 .settings-trigger { gap: 8px; cursor: pointer; }
 .search-trigger { gap: 8px; cursor: pointer; }
+.relationship-filter-control {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+}
+.relationship-filter-trigger { gap: 8px; cursor: pointer; }
+.relationship-filter-trigger.is-active {
+  gap: 8px;
+  border-color: color-mix(in srgb, var(--selected) 55%, var(--border));
+  background: color-mix(in srgb, var(--selected) 8%, var(--surface));
+  color: var(--selected);
+  border-radius: 11px 0 0 11px;
+}
+.relationship-filter-active-dot {
+  display: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.relationship-filter-trigger.is-active .relationship-filter-active-dot { display: block; }
+.relationship-filter-clear {
+  min-width: 34px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--selected) 55%, var(--border));
+  border-left: 0;
+  border-radius: 0 11px 11px 0;
+  background: color-mix(in srgb, var(--selected) 8%, var(--surface));
+  color: var(--selected);
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
+}
+.relationship-filter-clear:hover { background: color-mix(in srgb, var(--selected) 14%, var(--surface)); }
+.relationship-filter-clear[hidden] { display: none; }
 .search-trigger kbd {
   margin-left: 2px;
   padding: 2px 5px;
@@ -117,6 +156,102 @@ h1 {
   box-shadow: var(--shadow);
 }
 .settings-popover[hidden] { display: none; }
+.relationship-filter-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 9px);
+  left: 0;
+  width: min(390px, calc(100vw - 28px));
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.relationship-filter-popover[hidden] { display: none; }
+.relationship-filter-heading {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.relationship-filter-heading span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.relationship-filter-heading strong { font-size: 14px; font-weight: 650; }
+.relationship-filter-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.relationship-filter-presets button {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+}
+.relationship-filter-presets button:first-child { grid-column: 1 / -1; }
+.relationship-filter-presets button:hover:not(:disabled) { background: var(--surface-soft); }
+.relationship-filter-presets button.is-selected {
+  border-color: color-mix(in srgb, var(--selected) 55%, var(--border));
+  background: color-mix(in srgb, var(--selected) 9%, var(--surface));
+  color: var(--selected);
+}
+.relationship-filter-presets button:disabled { cursor: default; opacity: .45; }
+.relationship-filter-options {
+  display: grid;
+  gap: 11px;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+}
+.relationship-filter-options legend {
+  margin-bottom: 10px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.relationship-filter-options > label:not(.relationship-filter-check) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.relationship-filter-options select {
+  min-width: 132px;
+  padding: 7px 28px 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.relationship-filter-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 12px;
+}
+.relationship-filter-check input { margin: 0; accent-color: var(--selected); }
+.relationship-filter-options:disabled { opacity: .5; }
 .settings-heading { margin-bottom: 12px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .settings-option { display: flex; align-items: center; justify-content: space-between; gap: 18px; cursor: pointer; }
 .settings-option-copy { display: grid; gap: 4px; }
@@ -329,6 +464,11 @@ h1 {
   min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
+  transition: background-color 180ms ease;
+}
+
+.tree-workspace.is-filtered .tree-scroll {
+  background: color-mix(in srgb, var(--selected) 3%, var(--background));
 }
 
 .tree-stage {
@@ -342,8 +482,17 @@ h1 {
   overflow: visible;
 }
 
-.lane-background { fill: color-mix(in srgb, var(--surface-soft) 82%, var(--background)); }
+.lane-background {
+  fill: color-mix(in srgb, var(--surface-soft) 82%, var(--background));
+  transition: fill 180ms ease;
+}
 .lane-background.is-even { fill: color-mix(in srgb, var(--surface) 58%, var(--background)); }
+.tree-workspace.is-filtered .lane-background {
+  fill: color-mix(in srgb, var(--selected) 5%, color-mix(in srgb, var(--surface-soft) 82%, var(--background)));
+}
+.tree-workspace.is-filtered .lane-background.is-even {
+  fill: color-mix(in srgb, var(--selected) 3%, color-mix(in srgb, var(--surface) 58%, var(--background)));
+}
 .lane-rule { stroke: color-mix(in srgb, var(--border-strong) 80%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .lane-label { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 
@@ -362,8 +511,18 @@ h1 {
 .parentage-line.is-context, .union-line.is-context { opacity: .22; }
 .parentage-junction.is-context, .union-node.is-context { opacity: .3; }
 .family-shell.is-context, .person-link.is-context { opacity: .52; }
+.tree-workspace.is-filtered .person-link.is-context { opacity: 1; }
 .parentage-line.is-lineage { stroke: color-mix(in srgb, var(--selected) 84%, var(--border-strong)); stroke-width: 2; }
 .parentage-junction.is-lineage { fill: var(--selected); }
+.parentage-line.is-direct-child {
+  opacity: 1;
+  stroke: color-mix(in srgb, var(--selected) 58%, var(--border-strong));
+  stroke-width: 1.9;
+}
+.parentage-junction.is-direct-child {
+  opacity: 1;
+  fill: color-mix(in srgb, var(--selected) 62%, var(--surface));
+}
 .parentage-line.is-emphasized { opacity: 1; stroke-width: 2.8; }
 .parentage-junction.is-emphasized { opacity: 1; stroke-width: 2.2; }
 .offspring-origin { stroke-width: 1.8; }

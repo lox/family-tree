@@ -13,6 +13,55 @@
         <h1>Family tree</h1>
       </div>
       <div class="header-actions">
+        <div class="relationship-filter-control">
+          <button class="relationship-filter-trigger" id="relationship-filter-trigger" type="button" aria-expanded="false" aria-controls="relationship-filter-popover" aria-haspopup="dialog">
+            <svg class="control-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 4h14l-5.5 6.2v4.7l-3 1.5v-6.2z"/>
+            </svg>
+            <span id="relationship-filter-trigger-label">Filter</span>
+            <span class="relationship-filter-active-dot" aria-hidden="true"></span>
+          </button>
+          <button class="relationship-filter-clear" id="relationship-filter-clear" type="button" aria-label="Clear relationship filter" hidden>×</button>
+          <section class="relationship-filter-popover" id="relationship-filter-popover" role="dialog" aria-label="Filter relatives" hidden>
+            <header class="relationship-filter-heading">
+              <span>Filter relatives</span>
+              <strong id="relationship-filter-anchor">Select a person</strong>
+            </header>
+            <div class="relationship-filter-presets" role="group" aria-label="Filter presets">
+              <button type="button" data-filter-preset="full">Full tree</button>
+              <button type="button" data-filter-preset="immediate">Immediate family</button>
+              <button type="button" data-filter-preset="family">Family branch</button>
+              <button type="button" data-filter-preset="ancestors">Ancestors</button>
+              <button type="button" data-filter-preset="descendants">Descendants</button>
+            </div>
+            <fieldset class="relationship-filter-options" id="relationship-filter-options">
+              <legend>Customise</legend>
+              <label>
+                <span>Ancestor generations</span>
+                <select id="relationship-filter-ancestor-depth">
+                  <option value="0">None</option>
+                  <option value="1">Parents</option>
+                  <option value="2">2 generations</option>
+                  <option value="3">3 generations</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+              <label>
+                <span>Descendant generations</span>
+                <select id="relationship-filter-descendant-depth">
+                  <option value="0">None</option>
+                  <option value="1">Children</option>
+                  <option value="2">2 generations</option>
+                  <option value="3">3 generations</option>
+                  <option value="all">All</option>
+                </select>
+              </label>
+              <label class="relationship-filter-check"><input id="relationship-filter-partners" type="checkbox"> Partners of selected person</label>
+              <label class="relationship-filter-check"><input id="relationship-filter-siblings" type="checkbox"> Siblings</label>
+              <label class="relationship-filter-check"><input id="relationship-filter-descendant-partners" type="checkbox"> Partners of descendants</label>
+            </fieldset>
+          </section>
+        </div>
         <button class="search-trigger" id="person-search-trigger" type="button" aria-haspopup="dialog" aria-controls="person-search-dialog" aria-keyshortcuts="Meta+K Control+K" aria-label="Find a person">
           <svg class="control-icon" viewBox="0 0 20 20" aria-hidden="true">
             <circle cx="8.5" cy="8.5" r="5.25"/>
@@ -67,7 +116,7 @@
         <summary id="import-report-summary"></summary>
         <div class="import-report-card" id="import-report-card"></div>
       </details>
-      <p class="privacy-note">Select a person to trace their relationship path. · GED files stay in this browser.</p>
+      <p class="privacy-note">Select a person to trace their relationship path. · Double-click for a family branch. · GED files stay in this browser.</p>
     </div>
     <dialog class="person-search-dialog" id="person-search-dialog" aria-labelledby="person-search-title">
       <section class="person-search-panel">
