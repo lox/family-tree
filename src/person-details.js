@@ -54,9 +54,11 @@ export function buildPersonDetails(graph, personId) {
       familyId: family.id,
       partners: family.partners
         .filter(id => id !== personId)
-        .map(id => graph.people[id]?.name)
+        .map(id => graph.people[id] && ({ id, name: graph.people[id].name }))
         .filter(Boolean),
-      children: family.children.map(id => graph.people[id]?.name).filter(Boolean),
+      children: family.children
+        .map(id => graph.people[id] && ({ id, name: graph.people[id].name }))
+        .filter(Boolean),
       events: (family.events ?? [
         family.marriage && { label: 'Marriage', date: family.marriage, place: '' },
         family.divorce && { label: 'Divorce', date: family.divorce, place: '' },
@@ -68,6 +70,12 @@ export function buildPersonDetails(graph, personId) {
         place: event.place || ''
       }))
     }));
+  const parents = graph.families
+    .filter(family => family.children.includes(personId))
+    .flatMap(family => family.partners)
+    .filter((id, index, ids) => ids.indexOf(id) === index)
+    .map(id => graph.people[id] && ({ id, name: graph.people[id].name }))
+    .filter(Boolean);
 
   const citations = [
     ...(person.sources ?? []),
@@ -90,6 +98,7 @@ export function buildPersonDetails(graph, personId) {
     lifespan: lifespanFor(person, facts),
     personal,
     lifeEvents: facts.filter(fact => eventFactTags.has(fact.tag)).map(presentFact),
+    parents,
     relationships,
     notes: person.notes ?? [],
     sources,

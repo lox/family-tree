@@ -35,12 +35,29 @@ test('builds readable detail sections from structured GEDCOM data', () => {
   assert.equal(details.lifeEvents[0].label, 'Birth');
   assert.deepEqual(details.relationships[0], {
     familyId: 'F1',
-    partners: ['William King-Noel'],
-    children: ['Byron King-Noel'],
+    partners: [{ id: 'I2', name: 'William King-Noel' }],
+    children: [{ id: 'I3', name: 'Byron King-Noel' }],
     events: [{ label: 'Marriage', date: '1835', place: 'London' }]
   });
+  assert.deepEqual(details.parents, []);
   assert.equal(details.notes[0].text, 'Published the first algorithm.');
   assert.equal(details.lifespan, '1815–1852');
+});
+
+test('exposes recorded parents as selectable relationship targets', () => {
+  const graph = {
+    people: {
+      CHILD: { id: 'CHILD', name: 'Child Person' },
+      PARENT1: { id: 'PARENT1', name: 'First Parent' },
+      PARENT2: { id: 'PARENT2', name: 'Second Parent' }
+    },
+    families: [{ id: 'F1', partners: ['PARENT1', 'PARENT2'], children: ['CHILD'] }]
+  };
+
+  assert.deepEqual(buildPersonDetails(graph, 'CHILD').parents, [
+    { id: 'PARENT1', name: 'First Parent' },
+    { id: 'PARENT2', name: 'Second Parent' }
+  ]);
 });
 
 test('does not imply that a person with no recorded dates is living', () => {

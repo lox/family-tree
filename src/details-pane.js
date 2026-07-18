@@ -81,17 +81,48 @@ function createLifeEvents(events) {
   return list;
 }
 
-function createRelationships(relationships) {
+function createPersonLink(person, onSelectPerson) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'inspector-person-link';
+  button.dataset.personId = person.id;
+  button.textContent = person.name;
+  button.addEventListener('click', () => onSelectPerson(person.id));
+  return button;
+}
+
+function createPeopleLinks(label, people, onSelectPerson) {
+  const group = document.createElement('div');
+  group.className = 'inspector-relationship-people';
+  const prefix = document.createElement('span');
+  prefix.textContent = `${label} · `;
+  group.append(prefix);
+  people.forEach((person, index) => {
+    if (index) group.append(document.createTextNode(', '));
+    group.append(createPersonLink(person, onSelectPerson));
+  });
+  return group;
+}
+
+function createRelationships(parents, relationships, onSelectPerson) {
   const list = document.createElement('div');
   list.className = 'inspector-relationship-list';
+  if (parents.length) {
+    const parentGroup = document.createElement('article');
+    parentGroup.className = 'inspector-relationship';
+    parentGroup.append(createPeopleLinks('Parents', parents, onSelectPerson));
+    list.append(parentGroup);
+  }
   relationships.forEach(relationship => {
     const item = document.createElement('article');
     item.className = 'inspector-relationship';
-    const title = document.createElement('strong');
-    title.textContent = relationship.partners.length
-      ? relationship.partners.join(' & ')
-      : 'Recorded family';
-    item.append(title);
+    if (relationship.partners.length) {
+      item.append(createPeopleLinks('Partner', relationship.partners, onSelectPerson));
+    } else {
+      const title = document.createElement('strong');
+      title.textContent = 'Recorded family';
+      item.append(title);
+    }
     relationship.events.forEach(event => {
       const meta = document.createElement('div');
       meta.className = 'inspector-relationship-meta';
@@ -99,10 +130,7 @@ function createRelationships(relationships) {
       item.append(meta);
     });
     if (relationship.children.length) {
-      const children = document.createElement('div');
-      children.className = 'inspector-relationship-children';
-      children.textContent = `Children · ${relationship.children.join(', ')}`;
-      item.append(children);
+      item.append(createPeopleLinks('Children', relationship.children, onSelectPerson));
     }
     list.append(item);
   });
@@ -229,7 +257,7 @@ function createTopbar(dock, onDock, onClose) {
   return topbar;
 }
 
-function createSections(details, person) {
+function createSections(details, person, onSelectPerson) {
   const sections = document.createElement('div');
   sections.className = 'inspector-sections';
   if (details.personal.length) {
@@ -238,8 +266,11 @@ function createSections(details, person) {
   if (details.lifeEvents.length) {
     sections.append(createSection('Life events', createLifeEvents(details.lifeEvents)));
   }
-  if (details.relationships.length) {
-    sections.append(createSection('Relationships', createRelationships(details.relationships)));
+  if (details.parents.length || details.relationships.length) {
+    sections.append(createSection(
+      'Relationships',
+      createRelationships(details.parents, details.relationships, onSelectPerson)
+    ));
   }
   if (details.notes.length) {
     sections.append(createSection('Notes', createNotes(details.notes), {
@@ -265,7 +296,7 @@ function createSections(details, person) {
   return sections;
 }
 
-export function renderDetailsPane({ element, graph, personId, dock, onDock, onClose }) {
+export function renderDetailsPane({ element, graph, personId, dock, onDock, onClose, onSelectPerson }) {
   const person = graph.people[personId];
   if (!person) {
     const empty = document.createElement('div');
@@ -293,6 +324,6 @@ export function renderDetailsPane({ element, graph, personId, dock, onDock, onCl
   }
   const content = document.createElement('div');
   content.className = 'inspector-content';
-  content.append(heading, createSections(details, person));
+  content.append(heading, createSections(details, person, onSelectPerson));
   element.replaceChildren(createTopbar(dock, onDock, onClose), content);
 }
