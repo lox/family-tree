@@ -10,7 +10,11 @@ import {
 import { sampleGraph } from './sample-data.js';
 import { buildUnionPresentation } from './union-presentation.js';
 import { relationshipPeriod } from './relationship-period.js';
-import { createInspectorState, updateInspectorState } from './inspector-state.js';
+import {
+  createInspectorState,
+  defaultInspectorDock,
+  updateInspectorState
+} from './inspector-state.js';
 import { generationLaneBounds } from './lane-presentation.js';
 import { renderDetailsPane } from './details-pane.js';
 import {
@@ -48,7 +52,10 @@ function loadPresentationSettings() {
 let graph = sampleGraph;
 let selectedPersonId = 'I4';
 let emphasizedConnectionKeys = new Set();
-let inspectorState = createInspectorState({ dock: window.innerWidth < 760 ? 'bottom' : 'right' });
+let inspectorState = createInspectorState({
+  dock: defaultInspectorDock(window.innerWidth),
+  open: Boolean(selectedPersonId)
+});
 let presentationSettings = loadPresentationSettings();
 let lastWidth = 0;
 let scheduled = false;
@@ -155,13 +162,13 @@ function inspectorLimits(dock = inspectorState.dock) {
   return { min: 280, max: Math.max(280, Math.min(560, bounds.width - 300)) };
 }
 
-function applyInspectorLayout(hasSelection = Boolean(selectedPersonId)) {
+function applyInspectorLayout() {
   workspace.dataset.dock = inspectorState.dock;
-  workspace.classList.toggle('has-inspector', hasSelection);
+  workspace.classList.toggle('has-inspector', inspectorState.open);
   workspace.style.setProperty('--inspector-right-size', `${inspectorState.rightSize}px`);
   workspace.style.setProperty('--inspector-bottom-size', `${inspectorState.bottomSize}px`);
-  inspector.hidden = !hasSelection;
-  paneResizer.hidden = !hasSelection;
+  inspector.hidden = !inspectorState.open;
+  paneResizer.hidden = !inspectorState.open;
   paneResizer.setAttribute('aria-orientation', inspectorState.dock === 'right' ? 'vertical' : 'horizontal');
   paneResizer.setAttribute('aria-label', `Resize ${inspectorState.dock === 'right' ? 'right' : 'bottom'} details pane`);
   const currentSize = inspectorState.dock === 'right' ? inspectorState.rightSize : inspectorState.bottomSize;
@@ -172,8 +179,7 @@ function applyInspectorLayout(hasSelection = Boolean(selectedPersonId)) {
 }
 
 function renderInspector(personId) {
-  const person = graph.people[personId];
-  applyInspectorLayout(Boolean(person));
+  applyInspectorLayout();
   renderDetailsPane({
     element: inspector,
     graph,
@@ -185,11 +191,12 @@ function renderInspector(personId) {
       inspectorState = updateInspectorState(inspectorState, {
         type: 'resize', dock: inspectorState.dock, size: inspectorState[sizeKey], ...inspectorLimits()
       });
-      applyInspectorLayout(true);
+      applyInspectorLayout();
       renderInspector(selectedPersonId);
     },
     onClose: () => {
       selectedPersonId = '';
+      inspectorState = updateInspectorState(inspectorState, { type: 'close' });
       renderTree();
     }
   });
@@ -485,6 +492,9 @@ svg.addEventListener('click', event => {
   const nextSelection = selectionAfterTreeClick(link?.dataset.personId);
   if (nextSelection === selectedPersonId) return;
   selectedPersonId = nextSelection;
+  inspectorState = updateInspectorState(inspectorState, {
+    type: selectedPersonId ? 'open' : 'deselect-person'
+  });
   renderTree();
 });
 
@@ -543,11 +553,11 @@ function resizeInspector(clientX, clientY) {
     size: requestedSize,
     ...inspectorLimits(dock)
   });
-  applyInspectorLayout(true);
+  applyInspectorLayout();
 }
 
 paneResizer.addEventListener('pointerdown', event => {
-  if (!selectedPersonId) return;
+  if (!inspectorState.open) return;
   event.preventDefault();
   activeResizePointerId = event.pointerId;
   suppressTreeClickUntil = performance.now() + 400;
@@ -589,7 +599,7 @@ paneResizer.addEventListener('keydown', event => {
     size: inspectorState[sizeKey] + adjustment,
     ...inspectorLimits()
   });
-  applyInspectorLayout(true);
+  applyInspectorLayout();
 });
 
 document.addEventListener('keydown', event => {
@@ -605,7 +615,7 @@ document.addEventListener('keydown', event => {
 });
 
 window.addEventListener('resize', () => {
-  if (!selectedPersonId) return;
+  if (!inspectorState.open) return;
   const sizeKey = inspectorState.dock === 'right' ? 'rightSize' : 'bottomSize';
   inspectorState = updateInspectorState(inspectorState, {
     type: 'resize',
@@ -613,7 +623,7 @@ window.addEventListener('resize', () => {
     size: inspectorState[sizeKey],
     ...inspectorLimits()
   });
-  applyInspectorLayout(true);
+  applyInspectorLayout();
 });
 
 renderSettings();

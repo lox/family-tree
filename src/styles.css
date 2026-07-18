@@ -390,6 +390,16 @@ h1 {
 .inspector-heading { align-self: start; }
 .inspector-name { margin: 0; font-family: ui-serif, Georgia, serif; font-size: clamp(24px, 2.4vw, 32px); font-weight: 500; line-height: 1.08; letter-spacing: -.025em; }
 .inspector-years { margin-top: 8px; color: var(--muted); font-size: 14px; }
+.inspector-empty {
+  display: grid;
+  min-height: 160px;
+  place-content: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+.inspector-empty h2 { margin: 0; color: var(--foreground); font-family: ui-serif, Georgia, serif; font-size: 24px; font-weight: 500; }
+.inspector-empty p { max-width: 280px; margin: 10px 0 0; font-size: 14px; line-height: 1.5; }
 .inspector-content { min-width: 0; }
 .tree-workspace[data-dock="bottom"] .inspector-content {
   display: grid;

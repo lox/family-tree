@@ -268,7 +268,14 @@ function createSections(details, person) {
 export function renderDetailsPane({ element, graph, personId, dock, onDock, onClose }) {
   const person = graph.people[personId];
   if (!person) {
-    element.replaceChildren();
+    const empty = document.createElement('div');
+    empty.className = 'inspector-empty';
+    const heading = document.createElement('h2');
+    heading.textContent = 'No person selected';
+    const guidance = document.createElement('p');
+    guidance.textContent = 'Select a person in the tree to view their details.';
+    empty.append(heading, guidance);
+    element.replaceChildren(createTopbar(dock, onDock, onClose), empty);
     return;
   }
   const details = buildPersonDetails(graph, personId);

@@ -1,7 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createInspectorState, updateInspectorState } from '../src/inspector-state.js';
+import {
+  createInspectorState,
+  defaultInspectorDock,
+  updateInspectorState
+} from '../src/inspector-state.js';
+
+test('defaults mobile displays to the bottom dock', () => {
+  assert.equal(defaultInspectorDock(599), 'bottom');
+  assert.equal(defaultInspectorDock(600), 'bottom');
+  assert.equal(defaultInspectorDock(601), 'right');
+});
 
 test('switches one inspector pane between right and bottom docks', () => {
   const initial = createInspectorState();
@@ -35,4 +45,16 @@ test('resizes each dock independently and clamps the requested size', () => {
   assert.equal(wider.bottomSize, initial.bottomSize);
   assert.equal(clamped.bottomSize, 360);
   assert.equal(clamped.rightSize, 420);
+});
+
+test('keeps an opened inspector visible when selection clears until explicitly closed', () => {
+  const initial = createInspectorState();
+  const opened = updateInspectorState(initial, { type: 'open' });
+  const deselected = updateInspectorState(opened, { type: 'deselect-person' });
+  const closed = updateInspectorState(deselected, { type: 'close' });
+
+  assert.equal(initial.open, false);
+  assert.equal(opened.open, true);
+  assert.equal(deselected.open, true);
+  assert.equal(closed.open, false);
 });
