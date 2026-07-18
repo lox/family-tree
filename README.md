@@ -5,15 +5,25 @@ A browser-based GEDCOM family-tree experiment with a genealogy-specific layout e
 ## Run locally
 
 ```sh
-python3 -m http.server 4173 --bind 127.0.0.1
+npm ci
+npm run dev
 ```
 
-Open <http://127.0.0.1:4173/family-tree.html>. The bundled Kennedy sample opens by default; use **Open GEDCOM** to load another `.ged` file locally. GED data is parsed in the browser and is not uploaded.
+Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundled Kennedy sample opens by default; use **Open GEDCOM** to load another `.ged` file locally. GED data is parsed in the browser and is not uploaded.
 
 ## Test
 
 ```sh
 npm test
+npm run build
+```
+
+## Deploy
+
+The site is packaged as a small Nginx container and configured for Fly.io:
+
+```sh
+fly deploy
 ```
 
 ## Architecture

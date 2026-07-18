@@ -2,7 +2,17 @@
   "name": "family-tree",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
     "test": "node --test"
+  },
+  "devDependencies": {
+    "vite": "8.1.5"
   }
 }
