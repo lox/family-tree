@@ -123,7 +123,9 @@ h1 {
 :focus-visible { outline: 3px solid color-mix(in srgb, var(--selected) 45%, transparent); outline-offset: 2px; }
 
 .tree-meta {
+  position: relative;
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   min-height: 42px;
@@ -134,6 +136,42 @@ h1 {
 
 .tree-meta p { margin: 0; }
 .privacy-note { max-width: 520px; text-align: right; }
+
+.import-report { position: relative; z-index: 12; margin: -4px auto 0; }
+.import-report > summary {
+  max-width: min(390px, 40vw);
+  padding: 4px 8px;
+  overflow: hidden;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-report > summary:hover,
+.import-report[open] > summary { background: var(--surface-soft); color: var(--foreground); }
+.import-report[data-has-warnings="true"] > summary { color: light-dark(#8a5b1f, #efc37e); }
+.import-report-card {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  display: grid;
+  width: min(440px, calc(100vw - 36px));
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--foreground);
+  transform: translateX(-50%);
+}
+.import-report-status { color: var(--muted); font-size: 12px; }
+.import-report-card p { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.import-report-card ul { display: grid; gap: 10px; margin: 9px 0 0; padding: 11px 0 0; border-top: 1px solid var(--border); list-style: none; }
+.import-report-card li { display: grid; gap: 3px; font-size: 12px; line-height: 1.4; }
+.import-report-card li strong { font-weight: 650; }
+.import-report-card li span { color: var(--muted); overflow-wrap: anywhere; }
 
 .error-message {
   margin: 10px 10px 0;
@@ -490,6 +528,9 @@ h1 {
   .header-actions { width: 100%; flex-wrap: wrap; }
   .settings-popover { right: auto; left: 0; }
   .tree-meta { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .import-report { margin: 0; }
+  .import-report > summary { max-width: calc(100vw - 32px); padding-left: 0; }
+  .import-report-card { left: 0; transform: none; }
   .privacy-note { text-align: left; }
   .tree-workspace[data-dock="bottom"] .inspector-pane { grid-template-columns: 1fr; padding: 16px; }
   .tree-workspace[data-dock="bottom"] .inspector-topbar { grid-column: auto; }

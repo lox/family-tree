@@ -1,0 +1,13 @@
+0 HEAD
+1 SOUR Damaged export
+1 GEDC
+2 VERS 5.5.1
+0 @I1@ INDI
+1 NAME Known /PARENT/
+1 RESI Melbourne, Australia
+this line was damaged during export
+0 @F1@ FAM
+1 HUSB @I1@
+1 WIFE @I404@
+1 CHIL @I405@
+0 TRLR

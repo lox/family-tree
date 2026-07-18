@@ -1,0 +1,31 @@
+0 HEAD
+1 SOUR Reunion
+2 VERS 14
+1 GEDC
+2 VERS 5.5.1
+1 CHAR UTF-8
+0 @I1@ INDI
+1 _UID reunion-person-1
+1 NAME Avery /MORGAN/
+1 SEX X
+1 BIRT
+2 DATE 3 MAR 1980
+2 PLAC Melbourne, Australia
+1 OBJE
+2 FILE portraits/avery.jpg
+2 FORM image/jpeg
+2 TITL Avery Morgan
+2 _TYPE PHOTO
+2 _PRIM Y
+2 _SIZE 640 480
+0 @I2@ INDI
+1 NAME Sam /LEE/
+0 @I3@ INDI
+1 NAME Quinn /MORGAN/
+0 @F1@ FAM
+1 PART @I1@
+1 PART @I2@
+1 CHIL @I3@
+1 MARR
+2 DATE 2008
+0 TRLR
