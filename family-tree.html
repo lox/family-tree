@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Family Tree</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <main class="app-shell" id="app">
+    <header class="app-header">
+      <div class="app-title">
+        <h1>Family tree</h1>
+      </div>
+      <div class="header-actions">
+        <div class="settings-control">
+          <button class="settings-trigger" id="settings-trigger" type="button" aria-expanded="false" aria-controls="settings-popover" aria-haspopup="dialog">
+            <svg class="control-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 5h7M14 5h3M10 3v4M3 10h3M10 10h7M6 8v4M3 15h9M16 15h1M12 13v4"/>
+            </svg>
+            <span>Settings</span>
+          </button>
+          <section class="settings-popover" id="settings-popover" role="dialog" aria-label="Presentation settings" hidden>
+            <div class="settings-heading">Appearance</div>
+            <label class="settings-option" for="setting-sex-colors">
+              <span class="settings-option-copy">
+                <strong>Colour people by sex</strong>
+                <small>Use subtle accents when sex is recorded.</small>
+              </span>
+              <input id="setting-sex-colors" type="checkbox" role="switch">
+            </label>
+            <div class="sex-colour-key" id="sex-colour-key" hidden>
+              <span><i class="sex-swatch is-male"></i>Male</span>
+              <span><i class="sex-swatch is-female"></i>Female</span>
+              <span><i class="sex-swatch is-unknown"></i>Unspecified</span>
+            </div>
+          </section>
+        </div>
+        <label class="file-control">
+          <span>Open GEDCOM</span>
+          <input id="ged-file" type="file" accept=".ged,text/plain">
+        </label>
+      </div>
+    </header>
+
+    <div class="tree-meta">
+      <p id="tree-summary" aria-live="polite"></p>
+      <p class="privacy-note">Select a person to trace their relationship path. · GED files stay in this browser.</p>
+    </div>
+    <div class="tree-workspace" id="tree-workspace" data-dock="right">
+      <div class="tree-scroll">
+        <p class="error-message" id="error-message" role="alert" hidden></p>
+        <section class="tree-stage" aria-label="Family tree canvas">
+          <svg id="family-tree" role="img" aria-labelledby="tree-title tree-description">
+            <title id="tree-title">Interactive family tree</title>
+            <desc id="tree-description">Family groups arranged in compact generation lanes.</desc>
+          </svg>
+        </section>
+      </div>
+      <div class="pane-resizer" id="pane-resizer" role="separator" tabindex="0" hidden></div>
+      <aside class="inspector-pane" id="person-inspector" aria-label="Selected person details" aria-live="polite" hidden></aside>
+    </div>
+  </main>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
