@@ -99,7 +99,7 @@ function revealPersonCard(personId, focus = true) {
 
 function selectPerson(personId, {
   historyMode = 'push',
-  reveal = false,
+  reveal = Boolean(personId),
   focus = true,
   closeInspector = false
 } = {}) {
