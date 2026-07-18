@@ -109,6 +109,10 @@ h1 {
 .settings-option-copy strong { font-size: 13px; font-weight: 650; }
 .settings-option-copy small { color: var(--muted); font-size: 12px; line-height: 1.35; }
 .settings-option input { flex: 0 0 auto; width: 17px; height: 17px; margin: 0; accent-color: var(--selected); cursor: pointer; }
+.settings-size { display: grid; gap: 12px; margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--border); }
+.settings-range-control { display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: center; gap: 12px; }
+.settings-range-control input { width: 100%; margin: 0; accent-color: var(--selected); cursor: pointer; }
+.settings-range-control output { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
 .sex-colour-key { display: flex; flex-wrap: wrap; gap: 9px 15px; margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }
 .sex-colour-key[hidden] { display: none; }
 .sex-colour-key span { display: inline-flex; align-items: center; gap: 6px; }

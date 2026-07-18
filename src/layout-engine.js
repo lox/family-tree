@@ -232,10 +232,14 @@ const point = (x, y) => ({ x: Math.round(x * 100) / 100, y: Math.round(y * 100) 
 export function layoutFamilyGraph(projection, options = {}) {
   const width = Math.max(240, Math.floor(options.width ?? 960));
   const compact = width < (options.compactBreakpoint ?? 420);
+  const cardScale = Number.isFinite(options.cardScale) && options.cardScale > 0
+    ? options.cardScale
+    : 1;
+  const scaledMetric = value => Math.round(value * cardScale * 100) / 100;
   const sidePadding = compact ? 12 : 14;
   const routeGutter = 10;
-  const cardHeight = options.cardHeight ?? 82;
-  const standardCardWidth = options.cardWidth ?? 154;
+  const cardHeight = scaledMetric(options.cardHeight ?? 82);
+  const standardCardWidth = scaledMetric(options.cardWidth ?? 154);
   const cardWidth = compact
     ? Math.min(200, width - (sidePadding + routeGutter) * 2)
     : standardCardWidth;
@@ -538,7 +542,7 @@ export function layoutFamilyGraph(projection, options = {}) {
     width,
     height: Math.max(180, Math.ceil(cursorY + 8)),
     compact,
-    card: { width: cardWidth, height: cardHeight },
+    card: { width: cardWidth, height: cardHeight, scale: cardScale },
     nodes,
     units: unitLayouts,
     bands,

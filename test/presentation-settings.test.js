@@ -9,9 +9,15 @@ import {
 } from '../src/presentation-settings.js';
 
 test('keeps sex colours opt-in and ignores unsupported saved values', () => {
-  assert.deepEqual(createPresentationSettings(), { colorBySex: false });
-  assert.deepEqual(createPresentationSettings({ colorBySex: 'yes' }), { colorBySex: false });
-  assert.deepEqual(createPresentationSettings({ colorBySex: true, unknown: true }), { colorBySex: true });
+  assert.deepEqual(createPresentationSettings(), { colorBySex: false, cardScale: 1 });
+  assert.deepEqual(createPresentationSettings({ colorBySex: 'yes', cardScale: 'large' }), {
+    colorBySex: false,
+    cardScale: 1
+  });
+  assert.deepEqual(createPresentationSettings({ colorBySex: true, cardScale: 1.2, unknown: true }), {
+    colorBySex: true,
+    cardScale: 1.2
+  });
 });
 
 test('updates and round-trips presentation settings', () => {
@@ -21,8 +27,24 @@ test('updates and round-trips presentation settings', () => {
   });
   const serialized = serializePresentationSettings(enabled);
 
-  assert.equal(serialized, '{"colorBySex":true}');
+  assert.equal(serialized, '{"colorBySex":true,"cardScale":1}');
   assert.deepEqual(parsePresentationSettings(serialized), enabled);
+});
+
+test('updates card scale in bounded presentation steps', () => {
+  const initial = createPresentationSettings();
+  const enlarged = updatePresentationSettings(initial, {
+    type: 'set-card-scale',
+    scale: 1.2
+  });
+  const clamped = updatePresentationSettings(enlarged, {
+    type: 'set-card-scale',
+    scale: 2
+  });
+
+  assert.equal(enlarged.cardScale, 1.2);
+  assert.equal(clamped.cardScale, 1.3);
+  assert.deepEqual(parsePresentationSettings(serializePresentationSettings(enlarged)), enlarged);
 });
 
 test('reports malformed saved settings clearly', () => {

@@ -38,6 +38,8 @@ const settingsTrigger = document.querySelector('#settings-trigger');
 const settingsPopover = document.querySelector('#settings-popover');
 const sexColorsInput = document.querySelector('#setting-sex-colors');
 const sexColourKey = document.querySelector('#sex-colour-key');
+const cardScaleInput = document.querySelector('#setting-card-scale');
+const cardScaleOutput = document.querySelector('#setting-card-scale-value');
 
 function loadPresentationSettings() {
   try {
@@ -91,6 +93,9 @@ function setSettingsOpen(open) {
 function renderSettings() {
   sexColorsInput.checked = presentationSettings.colorBySex;
   sexColourKey.hidden = !presentationSettings.colorBySex;
+  const cardScalePercent = Math.round(presentationSettings.cardScale * 100);
+  cardScaleInput.value = String(cardScalePercent);
+  cardScaleOutput.value = `${cardScalePercent}%`;
 }
 
 function savePresentationSettings() {
@@ -208,7 +213,10 @@ function renderTree() {
   const width = Math.max(240, Math.floor(stage.getBoundingClientRect().width));
   let result;
   try {
-    result = buildFamilyLayout(graph, { width });
+    result = buildFamilyLayout(graph, {
+      width,
+      cardScale: presentationSettings.cardScale
+    });
   } catch (error) {
     errorMessage.textContent = error.message;
     errorMessage.hidden = false;
@@ -422,41 +430,51 @@ function renderTree() {
       'aria-label': `${person.name}${isAncestralEndpoint ? '. Ancestral endpoint: no parents recorded' : ''}`
     });
     const group = svgElement('g', { transform: `translate(${node.x} ${node.y})` });
+    const cardScale = layout.card.scale ?? 1;
+    const baseCardWidth = node.width / cardScale;
+    const baseCardHeight = node.height / cardScale;
+    const cardContent = svgElement('g', { transform: `scale(${cardScale})` });
     if (isAncestralEndpoint) {
       group.append(svgElement('title', {}, 'Ancestral endpoint · No parents recorded'));
     }
-    group.append(svgElement('rect', { width: node.width, height: node.height, rx: 10, class: 'person-card' }));
+    cardContent.append(svgElement('rect', {
+      width: baseCardWidth,
+      height: baseCardHeight,
+      rx: 10,
+      class: 'person-card'
+    }));
     if (isAncestralEndpoint) {
-      group.append(svgElement('circle', {
-        cx: node.width / 2,
+      cardContent.append(svgElement('circle', {
+        cx: baseCardWidth / 2,
         cy: 0,
         r: 6.25,
         class: 'ancestral-endpoint-badge',
         'aria-hidden': 'true'
       }));
-      group.append(svgElement('text', {
-        x: node.width / 2,
+      cardContent.append(svgElement('text', {
+        x: baseCardWidth / 2,
         y: 3,
         class: 'ancestral-endpoint-symbol',
         'aria-hidden': 'true'
       }, '?'));
     }
-    group.append(svgElement('circle', { cx: 22, cy: 23, r: 13, class: 'avatar' }));
-    group.append(svgElement('text', { x: 22, y: 27, class: 'avatar-text' }, initials(person.name)));
+    cardContent.append(svgElement('circle', { cx: 22, cy: 23, r: 13, class: 'avatar' }));
+    cardContent.append(svgElement('text', { x: 22, y: 27, class: 'avatar-text' }, initials(person.name)));
     const nameLines = formatCardName(person.name);
     const nameYs = cardNameBaselines(nameLines.length);
     const nameNodes = [];
     nameLines.forEach((line, index) => {
       const text = svgElement('text', { x: 42, y: nameYs[index], class: 'person-name' }, line);
       nameNodes.push(text);
-      group.append(text);
+      cardContent.append(text);
     });
     const years = [year(person.birth), year(person.death)].filter(Boolean).join('–') || 'Dates unknown';
-    group.append(svgElement('text', { x: 11, y: 59, class: 'person-meta' }, years));
-    group.append(svgElement('text', { x: 11, y: 73, class: 'person-meta' }, clip(person.birthPlace || person.deathPlace || '', 24)));
+    cardContent.append(svgElement('text', { x: 11, y: 59, class: 'person-meta' }, years));
+    cardContent.append(svgElement('text', { x: 11, y: 73, class: 'person-meta' }, clip(person.birthPlace || person.deathPlace || '', 24)));
+    group.append(cardContent);
     link.append(group);
     svg.append(link);
-    const maxNameWidth = node.width - 46;
+    const maxNameWidth = baseCardWidth - 46;
     nameNodes.forEach(text => {
       if (text.getComputedTextLength() > maxNameWidth) {
         text.setAttribute('textLength', maxNameWidth);
@@ -513,6 +531,16 @@ sexColorsInput.addEventListener('change', () => {
   savePresentationSettings();
   renderSettings();
   renderTree();
+});
+
+cardScaleInput.addEventListener('input', () => {
+  presentationSettings = updatePresentationSettings(presentationSettings, {
+    type: 'set-card-scale',
+    scale: Number(cardScaleInput.value) / 100
+  });
+  savePresentationSettings();
+  renderSettings();
+  scheduleRender();
 });
 
 document.addEventListener('click', () => setSettingsOpen(false));

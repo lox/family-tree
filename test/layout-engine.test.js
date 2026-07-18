@@ -153,6 +153,15 @@ test('packs wide generations into bands without shrinking cards or exceeding the
   assert.ok(layout.nodes.every(node => node.width === 154));
 });
 
+test('scales person cards before packing the generation bands', () => {
+  const projection = projectFamilyForest(graph);
+  const layout = layoutFamilyGraph(projection, { width: 900, cardScale: 1.2 });
+
+  assert.equal(layout.card.scale, 1.2);
+  assert.ok(layout.nodes.every(node => node.width === 184.8));
+  assert.ok(layout.nodes.every(node => node.height === 98.4));
+});
+
 test('stacks partners in compact viewports and keeps every node inside the layout', () => {
   const projection = projectFamilyForest(graph);
   const layout = layoutFamilyGraph(projection, { width: 300 });
