@@ -62,6 +62,8 @@ h1 {
 
 .file-control,
 .share-trigger,
+.edit-trigger,
+.export-trigger,
 .settings-trigger,
 .search-trigger,
 .relationship-filter-trigger {
@@ -74,6 +76,8 @@ h1 {
 
 .file-control,
 .share-trigger,
+.edit-trigger,
+.export-trigger,
 .settings-trigger,
 .search-trigger,
 .relationship-filter-trigger {
@@ -90,6 +94,8 @@ h1 {
 
 .file-control:hover,
 .share-trigger:hover,
+.edit-trigger:hover,
+.export-trigger:hover,
 .settings-trigger:hover,
 .settings-trigger[aria-expanded="true"],
 .search-trigger:hover,
@@ -316,6 +322,32 @@ h1 {
 .share-panel footer .share-create { border-color: var(--selected); background: var(--selected); color: var(--selected-foreground); }
 .share-panel footer .share-create:disabled { cursor: wait; opacity: .65; }
 .share-panel footer .share-create[hidden] { display: none; }
+
+.edit-dialog {
+  width: min(580px, calc(100vw - 28px));
+  max-width: none;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 17px;
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
+}
+.edit-dialog::backdrop { background: color-mix(in srgb, #0e1712 36%, transparent); backdrop-filter: blur(3px); }
+.edit-panel { display: grid; gap: 13px; padding: 22px; }
+.edit-panel h2 { margin: 0; font-family: ui-serif, Georgia, serif; font-size: 24px; font-weight: 550; }
+.edit-panel > p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.edit-panel > label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.edit-panel textarea { box-sizing: border-box; width: 100%; resize: vertical; padding: 11px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface-soft); color: var(--foreground); font: inherit; font-size: 14px; line-height: 1.45; }
+.edit-panel .edit-status { color: light-dark(#8a2929, #ffb1b1); }
+.edit-status:empty { display: none; }
+.edit-preview { padding: 13px 14px; border: 1px solid color-mix(in srgb, var(--selected) 35%, var(--border)); border-radius: 10px; background: color-mix(in srgb, var(--selected) 7%, var(--surface)); font-size: 13px; line-height: 1.5; }
+.edit-preview[hidden] { display: none; }
+.edit-panel footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 3px; }
+.edit-panel footer button { padding: 9px 13px; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); color: var(--foreground); cursor: pointer; font-size: 12px; font-weight: 650; }
+.edit-panel footer button:hover { background: var(--surface-soft); }
+.edit-panel footer #edit-apply { border-color: var(--selected); background: var(--selected); color: var(--selected-foreground); }
+.edit-panel footer button[hidden] { display: none; }
 
 .person-search-dialog {
   width: min(650px, calc(100vw - 28px));
