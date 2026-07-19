@@ -9,9 +9,9 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundled Kennedy sample opens by default; use **Import** to load another `.ged` file locally. GED data is parsed in the browser and is not uploaded unless **Share** is explicitly selected. Shared trees use an in-memory backend during local development and are cleared when the development server stops.
+Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundled Kennedy sample opens by default; use **Import** to load another `.ged` file locally. After a successful import, that action changes to **Share**. GED data is parsed in the browser and is not uploaded unless **Share** is explicitly selected. Shared trees use an in-memory backend during local development and are cleared when the development server stops.
 
-Choose **Import** to open a local GEDCOM or **Share** to create a public, unguessable link for the current tree. Anyone with that link can view the tree; links are not password protected. Production uploads are compressed and stored in a private Tigris bucket.
+Choose **Import** to open a local GEDCOM, then **Share** to create a public, unguessable link for it. Clicking **Share** again shows the existing link. Anyone with that link can view the tree; links are not password protected. Production uploads are compressed and stored in a private Tigris bucket.
 
 Uploads are limited to 100 MB and five attempts per client IP per hour. The Fly service also caps per-machine request concurrency so simultaneous multipart uploads cannot exhaust the 256 MB VM. Shared objects do not currently expire; configure a Tigris lifecycle policy before changing that retention behaviour.
 

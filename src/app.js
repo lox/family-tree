@@ -53,10 +53,12 @@ import {
   sharedTreeIdFromPathname
 } from './shared-tree.js';
 import { createShareControl } from './share-control.js';
+import { createTreeActionControl } from './tree-action-control.js';
 
 const svg = document.querySelector('#family-tree');
 const stage = document.querySelector('.tree-stage');
 const fileInput = document.querySelector('#ged-file');
+const fileControl = fileInput.closest('.file-control');
 const summary = document.querySelector('#tree-summary');
 const inspector = document.querySelector('#person-inspector');
 const workspace = document.querySelector('#tree-workspace');
@@ -133,6 +135,11 @@ let relationshipFilter = createRelationshipFilter();
 let activeTreeId = initialSharedTreeId && !initialLoadError
   ? initialSharedTreeId
   : crypto.randomUUID();
+const treeActionControl = createTreeActionControl({
+  fileControl,
+  shareTrigger: document.querySelector('#share-trigger'),
+  initiallyShareable: Boolean(initialSharedTreeId && !initialLoadError)
+});
 let recentPersonIds = selectedPersonId ? [selectedPersonId] : [];
 let inspectorState = createInspectorState({
   dock: defaultInspectorDock(window.innerWidth),
@@ -918,6 +925,7 @@ fileInput.addEventListener('change', async () => {
     updateHistory(selection, 'replace', '/');
     renderImportReport();
     renderTree();
+    treeActionControl.showShare();
   } catch (error) {
     errorMessage.textContent = `Could not open ${file.name}: ${error.message}`;
     errorMessage.hidden = false;
