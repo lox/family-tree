@@ -116,7 +116,7 @@
         <summary id="import-report-summary"></summary>
         <div class="import-report-card" id="import-report-card"></div>
       </details>
-      <p class="privacy-note">Select a person to trace their relationship path. · Double-click for a family branch. · GED files stay in this browser.</p>
+      <p class="privacy-note">Select a person to trace their relationship path. · Shift-click to compare two people. · Double-click for a family branch. · GED files stay in this browser.</p>
     </div>
     <dialog class="person-search-dialog" id="person-search-dialog" aria-labelledby="person-search-title">
       <section class="person-search-panel">
@@ -129,10 +129,16 @@
           <input id="person-search-input" type="search" placeholder="Find a person…" autocomplete="off" spellcheck="false" aria-controls="person-search-results" aria-autocomplete="list">
           <button class="person-search-close" id="person-search-close" type="button" aria-label="Close search">Esc</button>
         </div>
+        <div class="person-search-mode" id="person-search-mode" role="group" aria-label="Search action" hidden>
+          <button type="button" data-search-mode="select" aria-pressed="true">Go to person</button>
+          <button type="button" data-search-mode="compare" aria-pressed="false">
+            Compare with <strong id="person-search-compare-anchor"></strong>
+          </button>
+        </div>
         <div class="person-search-results" id="person-search-results" role="listbox" aria-label="People"></div>
         <footer class="person-search-footer">
           <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
-          <span><kbd>↵</kbd> Select</span>
+          <span><kbd>↵</kbd> <span id="person-search-submit-label">Open</span></span>
         </footer>
       </section>
     </dialog>

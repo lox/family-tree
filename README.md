@@ -13,7 +13,9 @@ Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundle
 
 After a file opens, its import report shows the detected GEDCOM version and producer, record counts, malformed lines, unsupported tags, skipped duplicate records, and family links to missing people. Valid records still open when the file contains recoverable problems. The parser has compatibility fixtures for GEDCOM 5.5.1 Reunion exports and GEDCOM 7 partner records.
 
-Use **Find** or press <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> to search the open tree by name, alias, place, date, or occupation. Selecting a relationship in Person Details moves to that person. Browser Back and Forward step through person selections without putting private GEDCOM identifiers in the URL.
+Use **Find** or press <kbd>⌘K</kbd> / <kbd>Ctrl+K</kbd> to search the open tree by name, alias, place, date, or occupation. With a person selected, Find can also compare them with another person; Shift-clicking a second card is the desktop shortcut. The relationship pane shows the closest recorded relationship and a person-by-person family line. Direct ancestors, descendants, siblings, aunts, uncles, nieces, nephews, and ordinary cousin paths receive plain-English labels; paths involving partners retain conservative recorded-connection wording.
+
+Person names and relationship links in the details pane are selectable. Partner lines and descendant lines can also be selected to inspect the corresponding family record or children. Browser Back and Forward step through person, family-line, and comparison selections without putting private GEDCOM identifiers in the URL.
 
 Selecting a person focuses their recorded ancestry, partners, and direct children while leaving the rest of the tree visible as subdued context. Double-click a person to filter the canvas to their family branch. The **Filter** panel also provides immediate-family, ancestor, and descendant presets, generation-depth controls, and optional sibling or partner inclusion. Use the × beside an active filter to restore the full tree.
 
@@ -45,11 +47,14 @@ fly deploy
 - `src/layout-engine.js` is a pure, DOM-independent forest projection and packing engine.
 - `src/connection-router.js` bundles one-to-many relationships, allocates obstacle-free channels, and emits trunks, rails, drops, junctions, or paired continuation portals.
 - `src/presentation-state.js` computes the selected person's relationship path without coupling color semantics to the layout engine.
+- `src/relationship-comparison.js` finds the closest recorded family path and derives conservative directional kinship labels and lineage entries.
+- `src/relationship-details.js` presents family-record metadata for selected partner and descendant connections.
 - `src/relationship-filter.js` selects people and trims family records for relationship-relative tree views.
 - `src/relationship-filter-control.js` owns the filter presets, custom controls, active state, and clear interaction.
-- `src/person-search.js` owns person matching and the keyboard-driven search dialog.
-- `src/navigation-state.js` scopes browser history entries to the GEDCOM currently held in memory.
-- `src/details-pane.js` owns the DOM presentation of a selected person's facts, events, relationships, notes, sources, media, and record metadata behind one rendering interface.
+- `src/person-search.js` owns person matching and the keyboard-driven find/compare dialog.
+- `src/navigation-state.js` validates person, family-connection, and comparison selections and scopes their browser history entries to the GEDCOM currently held in memory.
+- `src/details-pane.js` owns the DOM presentation of people, partnerships, descendant groups, and relationship comparisons behind one rendering interface.
+- `src/svg-rendering.js` owns shared SVG element creation, rounded connection geometry, hit targets, and keyboard exposure for routed lines.
 - `src/app.js` composes the layout, SVG renderer, details pane, selection, resizing, settings, and file loading.
 - `src/sample.ged` is the default demonstration file and goes through the same parser as an opened GEDCOM.
 

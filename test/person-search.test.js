@@ -43,6 +43,18 @@ test('uses recent people for an empty query and ignores missing IDs', () => {
   );
 });
 
+test('can omit the comparison anchor from search results', () => {
+  assert.deepEqual(
+    searchPeople(people, '', { recentIds: ['I2', 'I1'], excludeIds: ['I2'] })
+      .map(result => result.id),
+    ['I1']
+  );
+  assert.deepEqual(
+    searchPeople(people, 'fitzgerald', { excludeIds: ['I2'] }).map(result => result.id),
+    ['I1']
+  );
+});
+
 test('moves the active search result with wrapping keyboard navigation', () => {
   assert.equal(moveSearchSelection(-1, 1, 3), 0);
   assert.equal(moveSearchSelection(2, 1, 3), 0);

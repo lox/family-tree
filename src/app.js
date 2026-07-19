@@ -3,8 +3,8 @@ import { buildFamilyLayout } from './layout-engine.js';
 import { cardNameBaselines, formatCardName } from './name-format.js';
 import {
   ancestralEndpointIds,
-  computeRelationshipPath,
-  toggleConnectionSelection
+  computeConnectionFocus,
+  computeRelationshipPath
 } from './presentation-state.js';
 import sampleGedcom from './sample.ged?raw';
 import { buildUnionPresentation } from './union-presentation.js';
@@ -14,8 +14,11 @@ import {
   defaultInspectorDock,
   updateInspectorState
 } from './inspector-state.js';
-import { generationLaneBounds } from './lane-presentation.js';
-import { renderDetailsPane } from './details-pane.js';
+import {
+  generationLaneBounds,
+  generationLaneLabel
+} from './lane-presentation.js';
+import { renderSelectionDetailsPane } from './details-pane.js';
 import { buildImportReport } from './import-report.js';
 import {
   PRESENTATION_SETTINGS_KEY,
@@ -25,8 +28,11 @@ import {
   updatePresentationSettings
 } from './presentation-settings.js';
 import {
-  createPersonHistoryState,
-  personIdFromHistoryState
+  createSelectionHistoryState,
+  emptySelection,
+  selectionAfterShiftClick,
+  selectionFromHistoryState,
+  validatedSelection
 } from './navigation-state.js';
 import { createPersonSearchDialog } from './person-search.js';
 import {
@@ -35,8 +41,14 @@ import {
 } from './relationship-filter.js';
 import { createRelationshipFilterControl } from './relationship-filter-control.js';
 import { personClickIntent } from './person-click-intent.js';
+import { updateConnectionHover } from './connection-hover.js';
+import { buildRelationshipComparison } from './relationship-comparison.js';
+import {
+  appendInteractiveConnectionPath,
+  roundedPath,
+  svgElement
+} from './svg-rendering.js';
 
-const NS = 'http://www.w3.org/2000/svg';
 const svg = document.querySelector('#family-tree');
 const stage = document.querySelector('.tree-stage');
 const fileInput = document.querySelector('#ged-file');
@@ -59,6 +71,9 @@ const searchDialog = document.querySelector('#person-search-dialog');
 const searchInput = document.querySelector('#person-search-input');
 const searchResults = document.querySelector('#person-search-results');
 const searchClose = document.querySelector('#person-search-close');
+const searchMode = document.querySelector('#person-search-mode');
+const searchCompareAnchor = document.querySelector('#person-search-compare-anchor');
+const searchSubmitLabel = document.querySelector('#person-search-submit-label');
 
 function loadPresentationSettings() {
   try {
@@ -73,10 +88,10 @@ function loadPresentationSettings() {
 let graph = parseGedcom(sampleGedcom);
 let importLabel = 'Kennedy sample';
 let selectedPersonId = 'I4';
+let selection = { type: 'person', personId: selectedPersonId };
 let relationshipFilter = createRelationshipFilter();
 let activeTreeId = crypto.randomUUID();
 let recentPersonIds = selectedPersonId ? [selectedPersonId] : [];
-let emphasizedConnectionKeys = new Set();
 let inspectorState = createInspectorState({
   dock: defaultInspectorDock(window.innerWidth),
   open: Boolean(selectedPersonId)
@@ -87,6 +102,9 @@ let scheduled = false;
 let activeResizePointerId = null;
 let suppressTreeClickUntil = 0;
 let pendingPersonClickTimer = null;
+let hoveredConnectionKey = '';
+let renderedConnectionKeys = new Set();
+let focusableConnectionKeys = new Set();
 
 function cancelPendingPersonClick() {
   if (pendingPersonClickTimer === null) return;
@@ -102,17 +120,16 @@ const relationshipFilterControl = createRelationshipFilterControl({
   getSelectedPersonId: () => selectedPersonId,
   onChange: (nextFilter, { revealPersonId }) => {
     relationshipFilter = nextFilter;
-    emphasizedConnectionKeys = new Set();
     renderTree();
     if (revealPersonId) revealPersonCard(revealPersonId, false);
   },
   onOpen: () => setSettingsOpen(false)
 });
 
-function updateHistory(personId, mode) {
+function updateHistory(nextSelection, mode) {
   if (mode === 'none') return;
   const method = mode === 'replace' ? 'replaceState' : 'pushState';
-  window.history[method](createPersonHistoryState(activeTreeId, personId), '');
+  window.history[method](createSelectionHistoryState(activeTreeId, nextSelection), '');
 }
 
 function revealPersonCard(personId, focus = true) {
@@ -126,37 +143,64 @@ function revealPersonCard(personId, focus = true) {
   });
 }
 
-function selectPerson(personId, {
+function selectEntity(nextSelection, {
   historyMode = 'push',
-  reveal = Boolean(personId),
+  reveal = false,
   focus = true,
   closeInspector = false
 } = {}) {
-  const nextPersonId = personId && graph.people[personId] ? personId : '';
+  const validated = validatedSelection(nextSelection, graph);
+  const nextPersonId = validated.type === 'person'
+    ? validated.personId
+    : validated.type === 'comparison' ? validated.personIds[0] : '';
   const filteredGraph = applyRelationshipFilter(graph, relationshipFilter);
-  if (relationshipFilter.preset !== 'full' && nextPersonId && !filteredGraph.people[nextPersonId]) {
+  const selectedPeople = validated.type === 'comparison'
+    ? validated.personIds
+    : nextPersonId ? [nextPersonId] : [];
+  if (validated.type === 'comparison' && relationshipFilter.preset !== 'full') {
+    relationshipFilter = createRelationshipFilter();
+  } else if (
+    relationshipFilter.preset !== 'full'
+    && selectedPeople.some(personId => !filteredGraph.people[personId])
+  ) {
     relationshipFilter = createRelationshipFilter();
   }
-  const selectionChanged = nextPersonId !== selectedPersonId;
+  const selectionChanged = JSON.stringify(validated) !== JSON.stringify(selection);
   const inspectorWasOpen = inspectorState.open;
+  selection = validated;
   selectedPersonId = nextPersonId;
   inspectorState = updateInspectorState(inspectorState, {
-    type: closeInspector ? 'close' : nextPersonId ? 'open' : 'deselect-person'
+    type: closeInspector ? 'close' : validated.type !== 'none' ? 'open' : 'deselect-person'
   });
-  if (nextPersonId) {
-    recentPersonIds = [nextPersonId, ...recentPersonIds.filter(id => id !== nextPersonId)].slice(0, 8);
+  if (selectedPeople.length) {
+    recentPersonIds = [
+      ...[...selectedPeople].reverse(),
+      ...recentPersonIds.filter(id => !selectedPeople.includes(id))
+    ].slice(0, 8);
   }
-  if (selectionChanged) updateHistory(nextPersonId, historyMode);
+  if (selectionChanged) updateHistory(validated, historyMode);
   if (selectionChanged || inspectorWasOpen !== inspectorState.open) renderTree();
   if (reveal) revealPersonCard(nextPersonId, focus);
 }
 
-const svgElement = (tag, attributes = {}, text = '') => {
-  const element = document.createElementNS(NS, tag);
-  Object.entries(attributes).forEach(([name, value]) => element.setAttribute(name, value));
-  if (text) element.textContent = text;
-  return element;
-};
+function selectPerson(personId, options = {}) {
+  const nextSelection = personId && graph.people[personId]
+    ? { type: 'person', personId }
+    : emptySelection();
+  selectEntity(nextSelection, { reveal: Boolean(personId), ...options });
+}
+
+function comparePeople(primaryId, comparisonId, options = {}) {
+  if (!graph.people[primaryId] || !graph.people[comparisonId] || primaryId === comparisonId) {
+    selectPerson(primaryId, options);
+    return;
+  }
+  selectEntity({ type: 'comparison', personIds: [primaryId, comparisonId] }, options);
+}
+
+function shiftSelectPerson(personId) {
+  selectEntity(selectionAfterShiftClick(selection, personId));
+}
 
 const year = value => (value?.match(/\b(\d{4})\b/) ?? [,''])[1];
 const initials = name => {
@@ -227,54 +271,19 @@ function renderImportReport() {
   importReportCard.append(warningList);
 }
 
-function roundedPath(points, radius = 8) {
-  if (points.length < 2) return '';
-  const parts = [`M ${points[0].x} ${points[0].y}`];
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const previous = points[index - 1];
-    const current = points[index];
-    const next = points[index + 1];
-    const incoming = Math.hypot(current.x - previous.x, current.y - previous.y);
-    const outgoing = Math.hypot(next.x - current.x, next.y - current.y);
-    if (!incoming || !outgoing) continue;
-    const turnRadius = Math.min(radius, incoming / 2, outgoing / 2);
-    const before = {
-      x: current.x - (current.x - previous.x) / incoming * turnRadius,
-      y: current.y - (current.y - previous.y) / incoming * turnRadius
-    };
-    const after = {
-      x: current.x + (next.x - current.x) / outgoing * turnRadius,
-      y: current.y + (next.y - current.y) / outgoing * turnRadius
-    };
-    parts.push(`L ${before.x} ${before.y}`, `Q ${current.x} ${current.y} ${after.x} ${after.y}`);
-  }
-  const last = points.at(-1);
-  parts.push(`L ${last.x} ${last.y}`);
-  return parts.join(' ');
-}
-
-const emphasisClass = connectionKey => emphasizedConnectionKeys.has(connectionKey)
+const emphasisClass = connectionKey => renderedConnectionKeys.has(connectionKey)
   ? ' is-emphasized'
   : '';
 
 function appendInteractivePath(attributes, connectionKey) {
-  const group = svgElement('g', {
-    class: 'connection-group',
-    'data-connection-key': connectionKey
+  appendInteractiveConnectionPath({
+    svg,
+    attributes,
+    connectionKey,
+    graph,
+    selectedConnectionKeys: renderedConnectionKeys,
+    claimedConnectionKeys: focusableConnectionKeys
   });
-  group.append(
-    svgElement('path', {
-      ...attributes,
-      'data-connection-key': connectionKey
-    }),
-    svgElement('path', {
-      d: attributes.d,
-      class: 'connection-hit-target',
-      'data-connection-key': connectionKey,
-      'aria-hidden': 'true'
-    })
-  );
-  svg.append(group);
 }
 
 function inspectorLimits(dock = inspectorState.dock) {
@@ -301,12 +310,12 @@ function applyInspectorLayout() {
   paneResizer.setAttribute('aria-valuenow', String(currentSize));
 }
 
-function renderInspector(personId) {
+function renderInspector() {
   applyInspectorLayout();
-  renderDetailsPane({
+  renderSelectionDetailsPane({
     element: inspector,
     graph,
-    personId,
+    selection,
     dock: inspectorState.dock,
     onSelectPerson: personIdToSelect => {
       selectPerson(personIdToSelect, { reveal: true });
@@ -318,10 +327,10 @@ function renderInspector(personId) {
         type: 'resize', dock: inspectorState.dock, size: inspectorState[sizeKey], ...inspectorLimits()
       });
       applyInspectorLayout();
-      renderInspector(selectedPersonId);
+      renderInspector();
     },
     onClose: () => {
-      selectPerson('', { closeInspector: true });
+      selectEntity(emptySelection(), { closeInspector: true });
     }
   });
 }
@@ -347,21 +356,54 @@ function renderTree() {
   const visiblePeople = new Set(layout.nodes.map(node => node.personId));
   if (selectedPersonId && !visiblePeople.has(selectedPersonId)) {
     selectedPersonId = projection.units[0]?.anchorId;
+    selection = selectedPersonId
+      ? { type: 'person', personId: selectedPersonId }
+      : emptySelection();
   }
-  const relationshipPath = computeRelationshipPath(projection, selectedPersonId);
+  const comparisonDetails = selection.type === 'comparison'
+    ? buildRelationshipComparison(graph, ...selection.personIds)
+    : null;
+  renderedConnectionKeys = selection.type === 'partnership'
+    ? new Set([`union:${selection.familyId}`])
+    : selection.type === 'children'
+      ? new Set([`child:${selection.familyId}`])
+      : new Set(
+        [...(comparisonDetails?.connectionKeys ?? [])]
+          .filter(connectionKey => connectionKey.startsWith('union:'))
+      );
+  const relationshipPath = computeRelationshipPath(
+    projection,
+    selection.type === 'person' ? selectedPersonId : ''
+  );
+  const connectionFocus = computeConnectionFocus(projection, selection);
+  const comparisonPersonIds = new Set(comparisonDetails?.people.map(person => person.id) ?? []);
+  const comparisonFamilyIds = new Set(comparisonDetails?.steps.map(step => step.familyId) ?? []);
+  const comparisonUnitIds = new Set(
+    [...comparisonFamilyIds]
+      .map(familyId => projection.familyToUnit[familyId])
+      .filter(Boolean)
+  );
+  const comparisonChildEdgeIds = new Set((comparisonDetails?.steps ?? [])
+    .filter(step => step.type === 'parent' || step.type === 'child')
+    .map(step => `${step.familyId}:${step.type === 'child' ? step.toId : step.fromId}`));
+  const comparisonActive = Boolean(comparisonDetails?.connected);
   const endpointPersonIds = ancestralEndpointIds(projection);
   const unionPresentation = buildUnionPresentation(layout.unionEdges);
   const multiUnionUnitIds = new Set(unionPresentation.hubs.map(hub => hub.unitId));
   const renderedFamilyById = new Map(graph.families.map(family => [family.id, family]));
   const pathClass = isLineage => isLineage
     ? ' is-lineage'
-    : relationshipPath.active ? ' is-context' : '';
-  const childPathClass = familyId => relationshipPath.directChildFamilyIds.has(familyId)
+    : relationshipPath.active || connectionFocus.active || comparisonActive ? ' is-context' : '';
+  const childPathClass = familyId => selection.type === 'children' && selection.familyId === familyId
+    ? pathClass(true)
+    : relationshipPath.directChildFamilyIds.has(familyId)
     ? ' is-direct-child'
     : pathClass(false);
 
   const title = svg.querySelector('title');
   const description = svg.querySelector('desc');
+  hoveredConnectionKey = '';
+  focusableConnectionKeys = new Set();
   svg.replaceChildren(title, description);
   svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
   svg.style.aspectRatio = `${layout.width} / ${layout.height}`;
@@ -371,12 +413,12 @@ function renderTree() {
     if (!generationGroups.has(band.generation)) generationGroups.set(band.generation, []);
     generationGroups.get(band.generation).push(band);
   });
-  generationLaneBounds(layout.bands, layout.height).forEach(({ generation, start, end }) => {
+  const generationLanes = generationLaneBounds(layout.bands, layout.height);
+  generationLanes.forEach(({ generation, start, end }) => {
     svg.append(svgElement('rect', {
       x: 0, y: start, width: layout.width, height: end - start,
       class: `lane-background${generation % 2 ? ' is-even' : ''}`
     }));
-    svg.append(svgElement('text', { x: 12, y: start + 20, class: 'lane-label' }, `Generation ${generation + 1}`));
     if (generation) svg.append(svgElement('line', { x1: 0, y1: start, x2: layout.width, y2: start, class: 'lane-rule' }));
   });
 
@@ -397,12 +439,16 @@ function renderTree() {
     svg.append(svgElement('circle', {
       cx: junction.x, cy: junction.y, r: 2.5,
       class: `parentage-junction${childPathClass(junction.bundleId)}${emphasisClass(connectionKey)}`,
+      'data-connection-key': connectionKey,
       'data-bundle-id': junction.bundleId,
       'data-junction': 'child-split'
     }));
   });
   layout.connections.routes
-    .filter(route => relationshipPath.parentageEdgeIds.has(route.targetId))
+    .filter(route => (
+      relationshipPath.parentageEdgeIds.has(route.targetId)
+      || comparisonChildEdgeIds.has(route.targetId)
+    ))
     .forEach(route => {
       const connectionKey = `child:${route.bundleId}`;
       svg.append(svgElement('path', {
@@ -417,13 +463,19 @@ function renderTree() {
   layout.units.filter(unit => unit.inPartnerGroup && !multiUnionUnitIds.has(unit.id)).forEach(unit => {
     svg.append(svgElement('rect', {
       x: unit.x - 6, y: unit.y - 6, width: unit.width + 12, height: unit.height + 12, rx: 15,
-      class: `family-shell${pathClass(relationshipPath.unitIds.has(unit.id))}`
+      class: `family-shell${pathClass(
+        relationshipPath.unitIds.has(unit.id) || connectionFocus.unitIds.has(unit.id)
+        || comparisonUnitIds.has(unit.id)
+      )}`
     }));
   });
 
   unionPresentation.directEdges.forEach(edge => {
     const unionKey = `union:${edge.familyId}`;
-    const relationshipClass = pathClass(relationshipPath.unionFamilyIds.has(edge.familyId));
+    const relationshipClass = pathClass(
+      relationshipPath.unionFamilyIds.has(edge.familyId)
+      || renderedConnectionKeys.has(`union:${edge.familyId}`)
+    );
     appendInteractivePath({
       d: roundedPath(edge.points, 6),
       class: `union-line${relationshipClass}${emphasisClass(unionKey)}`,
@@ -435,6 +487,7 @@ function renderTree() {
       cy: edge.port.y,
       r: 3.25,
       class: `union-node${relationshipClass}${emphasisClass(unionKey)}`,
+      'data-connection-key': unionKey,
       'data-relationship': edge.relationship,
       'data-family-id': edge.familyId,
       'aria-hidden': 'true'
@@ -467,10 +520,11 @@ function renderTree() {
       const unionKey = `union:${branch.familyId}`;
       const relationshipClass = pathClass(
         relationshipPath.unionFamilyIds.has(branch.familyId)
+        || renderedConnectionKeys.has(`union:${branch.familyId}`)
       );
       appendInteractivePath({
         d: roundedPath(branch.points, 4),
-        class: `union-line union-hub-branch${pathClass(false)}${emphasisClass(unionKey)}`,
+        class: `union-line union-hub-branch${relationshipClass}${emphasisClass(unionKey)}`,
         'data-relationship': 'partner',
         'data-family-id': branch.familyId
       }, unionKey);
@@ -478,13 +532,17 @@ function renderTree() {
         cx: branch.port.x,
         cy: branch.port.y,
         r: 3.25,
-        class: `union-node${pathClass(false)}${emphasisClass(unionKey)}`,
+        class: `union-node${relationshipClass}${emphasisClass(unionKey)}`,
+        'data-connection-key': unionKey,
         'data-relationship': 'partner',
         'data-family-id': branch.familyId,
         'aria-hidden': 'true'
       }));
 
-      if (relationshipPath.unionFamilyIds.has(branch.familyId)) {
+      if (
+        relationshipPath.unionFamilyIds.has(branch.familyId)
+        || renderedConnectionKeys.has(unionKey)
+      ) {
         svg.append(svgElement('path', {
           d: roundedPath(branch.routePoints, 6),
           class: `union-line union-hub-route is-lineage${emphasisClass(unionKey)}`,
@@ -497,6 +555,7 @@ function renderTree() {
           cy: branch.port.y,
           r: 3.25,
           class: `union-node is-lineage${emphasisClass(unionKey)}`,
+          'data-connection-key': unionKey,
           'data-relationship': 'partner',
           'data-family-id': branch.familyId,
           'aria-hidden': 'true'
@@ -528,7 +587,8 @@ function renderTree() {
       const labelY = branch.port.y - layout.card.height / 2 - 8;
       const labelGroup = svgElement('g', {
         class: `union-label${relationshipClass}`,
-        'data-family-id': branch.familyId
+        'data-family-id': branch.familyId,
+        'data-connection-key': unionKey
       });
       if (period.title) labelGroup.append(svgElement('title', {}, period.title));
       labelGroup.append(svgElement('rect', {
@@ -548,13 +608,34 @@ function renderTree() {
     });
   });
 
+  generationLanes.map(generationLaneLabel).forEach(label => {
+    const parityClass = label.generation % 2 ? ' is-even' : '';
+    svg.append(svgElement('rect', {
+      x: label.x,
+      y: label.y,
+      width: label.width,
+      height: label.height,
+      rx: 7,
+      class: `lane-label-backing${parityClass}`
+    }));
+    svg.append(svgElement('text', {
+      x: label.textX,
+      y: label.textY,
+      class: 'lane-label'
+    }, label.label));
+  });
+
   layout.nodes.forEach(node => {
     const person = graph.people[node.personId];
     if (!person) return;
     const isAncestralEndpoint = endpointPersonIds.has(person.id);
     const link = svgElement('a', {
       href: `#person-${person.id}`,
-      class: `person-link${node.inPartnerGroup ? ' is-partner-group' : ''}${isAncestralEndpoint ? ' is-ancestral-endpoint' : ''}${sexClassFor(person)}${person.id === selectedPersonId ? ' is-selected' : ''}${pathClass(relationshipPath.personIds.has(person.id))}`,
+      class: `person-link${node.inPartnerGroup ? ' is-partner-group' : ''}${isAncestralEndpoint ? ' is-ancestral-endpoint' : ''}${sexClassFor(person)}${selection.type === 'person' && person.id === selectedPersonId ? ' is-selected' : ''}${selection.type === 'comparison' && person.id === selection.personIds[0] ? ' is-comparison-primary' : ''}${selection.type === 'comparison' && person.id === selection.personIds[1] ? ' is-comparison-secondary' : ''}${pathClass(
+        relationshipPath.personIds.has(person.id)
+        || connectionFocus.personIds.has(person.id)
+        || comparisonPersonIds.has(person.id)
+      )}`,
       'data-person-id': person.id,
       'aria-label': `${person.name}${isAncestralEndpoint ? '. Ancestral endpoint: no parents recorded' : ''}`
     });
@@ -615,7 +696,7 @@ function renderTree() {
   const familyCount = renderedGraph.families.length;
   summary.textContent = `${visiblePeople.size} visible of ${Object.keys(graph.people).length} people · ${familyCount} ${familyCount === 1 ? 'family' : 'families'} · ${generationGroups.size} generations`;
   relationshipFilterControl.render(relationshipFilter);
-  renderInspector(selectedPersonId);
+  renderInspector();
 }
 
 function scheduleRender() {
@@ -630,13 +711,64 @@ const personSearch = createPersonSearchDialog({
   input: searchInput,
   resultsElement: searchResults,
   closeButton: searchClose,
+  modeElement: searchMode,
+  compareAnchorLabel: searchCompareAnchor,
+  actionLabel: searchSubmitLabel,
   getPeople: () => graph.people,
   getRecentIds: () => recentPersonIds,
+  getCompareAnchor: () => selection.type === 'person' ? graph.people[selection.personId] : null,
   onOpen: () => {
     setSettingsOpen(false);
     relationshipFilterControl.close();
   },
-  onSelect: personId => selectPerson(personId, { reveal: true })
+  onSelect: (personId, { mode, anchorId }) => {
+    if (mode === 'compare') {
+      comparePeople(anchorId, personId);
+      revealPersonCard(personId);
+      return;
+    }
+    selectPerson(personId, { reveal: true });
+  }
+});
+
+function selectConnection(connectionKey) {
+  const [kind, familyId] = connectionKey.split(':');
+  selectEntity({
+    type: kind === 'union' ? 'partnership' : 'children',
+    familyId
+  });
+}
+
+function connectionKeyFor(target) {
+  return target instanceof Element
+    ? target.closest('[data-connection-key]')?.dataset.connectionKey ?? ''
+    : '';
+}
+
+function applyConnectionHover(nextKey) {
+  if (nextKey === hoveredConnectionKey) return;
+  hoveredConnectionKey = nextKey;
+  svg.querySelectorAll('[data-connection-key]').forEach(element => {
+    element.classList.toggle(
+      'is-connection-hovered',
+      Boolean(nextKey) && element.dataset.connectionKey === nextKey
+    );
+  });
+}
+
+svg.addEventListener('pointerover', event => {
+  const key = connectionKeyFor(event.target);
+  if (!key) return;
+  applyConnectionHover(updateConnectionHover(hoveredConnectionKey, { type: 'enter', key }));
+});
+
+svg.addEventListener('pointerout', event => {
+  const key = connectionKeyFor(event.target);
+  if (!key) return;
+  const nextKey = connectionKeyFor(event.relatedTarget);
+  applyConnectionHover(updateConnectionHover(hoveredConnectionKey, {
+    type: 'leave', key, nextKey
+  }));
 });
 
 svg.addEventListener('click', event => {
@@ -645,11 +777,7 @@ svg.addEventListener('click', event => {
   if (connection) {
     cancelPendingPersonClick();
     event.preventDefault();
-    emphasizedConnectionKeys = toggleConnectionSelection(
-      emphasizedConnectionKeys,
-      connection.dataset.connectionKey
-    );
-    renderTree();
+    selectConnection(connection.dataset.connectionKey);
     return;
   }
   const link = event.target.closest('.person-link');
@@ -661,7 +789,12 @@ svg.addEventListener('click', event => {
 
   event.preventDefault();
   const personId = link.dataset.personId;
-  const intent = personClickIntent(event.detail);
+  if (event.shiftKey) {
+    cancelPendingPersonClick();
+    shiftSelectPerson(personId);
+    return;
+  }
+  const intent = personClickIntent(event.detail, { inspectorOpen: inspectorState.open });
   cancelPendingPersonClick();
   if (intent === 'open-family-branch') {
     selectPerson(personId, { reveal: false, focus: false });
@@ -676,6 +809,14 @@ svg.addEventListener('click', event => {
     pendingPersonClickTimer = null;
     selectPerson(personId, { focus: false });
   }, 240);
+});
+
+svg.addEventListener('keydown', event => {
+  if (event.key !== 'Enter' && event.key !== ' ') return;
+  const connection = event.target.closest('[data-connection-key]');
+  if (!connection) return;
+  event.preventDefault();
+  selectConnection(connection.dataset.connectionKey);
 });
 
 settingsTrigger.addEventListener('click', event => {
@@ -719,12 +860,13 @@ fileInput.addEventListener('change', async () => {
     graph = parseGedcom(await file.text());
     importLabel = file.name;
     selectedPersonId = '';
+    selection = emptySelection();
     relationshipFilter = createRelationshipFilter();
     activeTreeId = crypto.randomUUID();
     recentPersonIds = [];
-    emphasizedConnectionKeys = new Set();
+    searchInput.placeholder = 'Find a person…';
     inspectorState = updateInspectorState(inspectorState, { type: 'deselect-person' });
-    updateHistory('', 'replace');
+    updateHistory(selection, 'replace');
     renderImportReport();
     renderTree();
   } catch (error) {
@@ -807,6 +949,7 @@ paneResizer.addEventListener('keydown', event => {
 document.addEventListener('keydown', event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'k') {
     event.preventDefault();
+    searchInput.placeholder = 'Find a person…';
     personSearch.open();
     return;
   }
@@ -826,13 +969,16 @@ document.addEventListener('keydown', event => {
     relationshipFilterControl.focus();
     return;
   }
-  if (!selectedPersonId) return;
-  selectPerson('');
+  if (selection.type === 'none') return;
+  selectEntity(emptySelection());
 });
 
 window.addEventListener('popstate', event => {
-  const personId = personIdFromHistoryState(event.state, activeTreeId, graph.people);
-  selectPerson(personId, { historyMode: 'none', reveal: Boolean(personId) });
+  const restoredSelection = selectionFromHistoryState(event.state, activeTreeId, graph);
+  selectEntity(restoredSelection, {
+    historyMode: 'none',
+    reveal: restoredSelection.type === 'person'
+  });
 });
 
 window.addEventListener('resize', () => {
@@ -850,4 +996,4 @@ window.addEventListener('resize', () => {
 renderSettings();
 renderImportReport();
 renderTree();
-updateHistory(selectedPersonId, 'replace');
+updateHistory(selection, 'replace');

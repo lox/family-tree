@@ -1,12 +1,3 @@
-export const selectionAfterTreeClick = personId => personId ?? '';
-
-export function toggleConnectionSelection(selectedKeys, connectionKey) {
-  const next = new Set(selectedKeys);
-  if (next.has(connectionKey)) next.delete(connectionKey);
-  else next.add(connectionKey);
-  return next;
-}
-
 export function ancestralEndpointIds(projection) {
   const recordedChildren = new Set(
     projection.families.flatMap(family => family.children)
@@ -16,6 +7,25 @@ export function ancestralEndpointIds(projection) {
       ? unit.personIds.filter(personId => !recordedChildren.has(personId))
       : []
   )));
+}
+
+export function computeConnectionFocus(projection, selection) {
+  const personIds = new Set();
+  const familyIds = new Set();
+  const unitIds = new Set();
+  const family = projection.families.find(candidate => candidate.id === selection?.familyId);
+  if (!family || (selection.type !== 'partnership' && selection.type !== 'children')) {
+    return { active: false, personIds, familyIds, unitIds };
+  }
+
+  familyIds.add(family.id);
+  family.partners.forEach(personId => personIds.add(personId));
+  if (selection.type === 'children') {
+    family.children.forEach(personId => personIds.add(personId));
+  }
+  const unitId = projection.familyToUnit[family.id];
+  if (unitId) unitIds.add(unitId);
+  return { active: true, personIds, familyIds, unitIds };
 }
 
 export function computeRelationshipPath(projection, selectedPersonId) {

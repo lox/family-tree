@@ -45,17 +45,21 @@ const matchScore = (person, query) => {
   return Number.isFinite(metadataPosition) ? 200 + metadataPosition : null;
 };
 
-export function searchPeople(people, rawQuery, { limit = 12, recentIds = [] } = {}) {
+export function searchPeople(people, rawQuery, {
+  limit = 12, recentIds = [], excludeIds = []
+} = {}) {
   const query = normalize(rawQuery);
+  const excluded = new Set(excludeIds);
   if (!query) {
     return recentIds
       .map(id => people[id])
-      .filter(Boolean)
+      .filter(person => person && !excluded.has(person.id))
       .slice(0, limit)
       .map(person => resultFor(person));
   }
 
   return Object.values(people)
+    .filter(person => !excluded.has(person.id))
     .map(person => ({ person, score: matchScore(person, query) }))
     .filter(result => result.score !== null)
     .sort((left, right) => left.score - right.score || left.person.name.localeCompare(right.person.name))
@@ -75,13 +79,19 @@ export function createPersonSearchDialog({
   input,
   resultsElement,
   closeButton,
+  modeElement,
+  compareAnchorLabel,
+  actionLabel,
   getPeople,
   getRecentIds,
+  getCompareAnchor = () => null,
   onOpen = () => {},
   onSelect
 }) {
   let activeResults = [];
   let activeIndex = -1;
+  let mode = 'select';
+  let comparisonAnchor = null;
 
   const updateActiveResult = () => {
     const options = [...resultsElement.querySelectorAll('.person-search-result')];
@@ -104,12 +114,15 @@ export function createPersonSearchDialog({
     const result = activeResults[index];
     if (!result) return;
     close();
-    onSelect(result.id);
+    onSelect(result.id, { mode, anchorId: comparisonAnchor?.id ?? '' });
   };
 
   const render = () => {
     const query = input.value.trim();
-    activeResults = searchPeople(getPeople(), query, { recentIds: getRecentIds() });
+    activeResults = searchPeople(getPeople(), query, {
+      recentIds: getRecentIds(),
+      excludeIds: mode === 'compare' && comparisonAnchor ? [comparisonAnchor.id] : []
+    });
     activeIndex = activeResults.length ? 0 : -1;
     const content = document.createDocumentFragment();
     if (!query && activeResults.length) {
@@ -157,16 +170,36 @@ export function createPersonSearchDialog({
     updateActiveResult();
   };
 
+  const setMode = nextMode => {
+    mode = nextMode === 'compare' && comparisonAnchor ? 'compare' : 'select';
+    modeElement?.querySelectorAll('[data-search-mode]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.searchMode === mode));
+    });
+    input.placeholder = mode === 'compare'
+      ? `Compare with ${comparisonAnchor.name}…`
+      : 'Find a person…';
+    if (actionLabel) actionLabel.textContent = mode === 'compare' ? 'Compare' : 'Open';
+    render();
+    input.focus();
+  };
+
   const open = () => {
     onOpen();
+    comparisonAnchor = getCompareAnchor();
+    if (modeElement) modeElement.hidden = !comparisonAnchor;
+    if (compareAnchorLabel) compareAnchorLabel.textContent = comparisonAnchor?.name ?? '';
     if (!dialog.open) dialog.showModal();
     input.value = '';
-    render();
+    setMode('select');
     requestAnimationFrame(() => input.focus());
   };
 
   trigger.addEventListener('click', open);
   closeButton.addEventListener('click', () => close());
+  modeElement?.addEventListener('click', event => {
+    const button = event.target.closest('[data-search-mode]');
+    if (button) setMode(button.dataset.searchMode);
+  });
   input.addEventListener('input', render);
   input.addEventListener('keydown', event => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

@@ -1,4 +1,9 @@
 import { buildPersonDetails } from './person-details.js';
+import {
+  buildChildrenDetails,
+  buildPartnershipDetails
+} from './relationship-details.js';
+import { buildRelationshipComparison } from './relationship-comparison.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const detailMeta = (...parts) => parts.filter(Boolean).join(' · ');
@@ -229,12 +234,12 @@ function createPaneIcon(type) {
   return icon;
 }
 
-function createTopbar(dock, onDock, onClose) {
+function createTopbar(dock, onDock, onClose, labelText = 'Person details') {
   const topbar = document.createElement('div');
   topbar.className = 'inspector-topbar';
   const label = document.createElement('span');
   label.className = 'inspector-label';
-  label.textContent = 'Person details';
+  label.textContent = labelText;
   const actions = document.createElement('div');
   actions.className = 'inspector-actions';
   const nextDock = dock === 'right' ? 'bottom' : 'right';
@@ -297,6 +302,214 @@ function createSections(details, person, onSelectPerson) {
 }
 
 export function renderDetailsPane({ element, graph, personId, dock, onDock, onClose, onSelectPerson }) {
+  return renderSelectionDetailsPane({
+    element,
+    graph,
+    selection: personId ? { type: 'person', personId } : { type: 'none' },
+    dock,
+    onDock,
+    onClose,
+    onSelectPerson
+  });
+}
+
+function createComparisonChain(details, onSelectPerson) {
+  const list = document.createElement('ol');
+  list.className = 'inspector-comparison-chain';
+  details.lineage.forEach(entry => {
+    const item = document.createElement('li');
+    const marker = document.createElement('span');
+    marker.className = 'inspector-comparison-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    const body = document.createElement('div');
+    body.append(createPersonLink(entry.person, onSelectPerson));
+    const relationship = document.createElement('span');
+    relationship.className = 'inspector-comparison-role';
+    relationship.textContent = entry.relationship;
+    body.append(relationship);
+    item.append(marker, body);
+    list.append(item);
+  });
+  return list;
+}
+
+function createComparisonEndpoints(details, onSelectPerson) {
+  const endpoints = [details.people[0], details.people.at(-1)].filter(Boolean);
+  const group = document.createElement('div');
+  group.className = 'inspector-comparison-endpoints';
+  endpoints.forEach((person, index) => {
+    if (index) {
+      const arrow = document.createElement('span');
+      arrow.className = 'inspector-comparison-arrow';
+      arrow.textContent = '→';
+      arrow.setAttribute('aria-hidden', 'true');
+      group.append(arrow);
+    }
+    const endpoint = document.createElement('div');
+    endpoint.className = 'inspector-comparison-endpoint';
+    const label = document.createElement('span');
+    label.textContent = index === 0 ? 'Reference person' : 'Compared person';
+    endpoint.append(label, createPersonLink(person, onSelectPerson));
+    group.append(endpoint);
+  });
+  return group;
+}
+
+function createComparisonHeading(details, onSelectPerson) {
+  const heading = document.createElement('div');
+  heading.className = 'inspector-heading inspector-comparison-heading';
+  heading.append(createComparisonEndpoints(details, onSelectPerson));
+  const kicker = document.createElement('div');
+  kicker.className = 'inspector-comparison-kicker';
+  kicker.textContent = 'Closest recorded relationship';
+  heading.append(kicker);
+  const name = document.createElement('h2');
+  name.className = 'inspector-name';
+  name.textContent = details.relationship?.forwardTerm
+    ? details.relationship.forwardTerm.charAt(0).toUpperCase() + details.relationship.forwardTerm.slice(1)
+    : details.connected ? 'Recorded family connection' : 'No recorded relationship';
+  heading.append(name);
+  const statement = document.createElement('p');
+  statement.className = 'inspector-comparison-statement';
+  statement.textContent = details.relationship?.forward ?? details.summary;
+  heading.append(statement);
+  if (details.relationship?.reverse && details.relationship.reverse !== details.relationship.forward) {
+    const reciprocal = document.createElement('p');
+    reciprocal.className = 'inspector-comparison-reciprocal';
+    reciprocal.textContent = details.relationship.reverse;
+    heading.append(reciprocal);
+  }
+  const meta = document.createElement('div');
+  meta.className = 'inspector-years';
+  meta.textContent = details.summary;
+  heading.append(meta);
+  return heading;
+}
+
+function renderComparisonPane({ element, graph, selection, dock, onDock, onClose, onSelectPerson }) {
+  const details = buildRelationshipComparison(graph, ...selection.personIds);
+  const sections = document.createElement('div');
+  sections.className = 'inspector-sections';
+  if (details.connected) {
+    sections.append(createSection(
+      'Family line',
+      createComparisonChain(details, onSelectPerson),
+      { count: details.lineage.length }
+    ));
+  } else {
+    const guidance = document.createElement('p');
+    guidance.className = 'inspector-comparison-empty';
+    guidance.textContent = 'These people may still be related, but this file does not contain a connected chain of family records.';
+    sections.append(createSection('Recorded path', guidance));
+  }
+  const content = document.createElement('div');
+  content.className = 'inspector-content';
+  content.append(createComparisonHeading(details, onSelectPerson), sections);
+  element.replaceChildren(createTopbar(dock, onDock, onClose, 'Relationship'), content);
+}
+
+function createRelationshipHeading(title, eyebrow) {
+  const heading = document.createElement('div');
+  heading.className = 'inspector-heading';
+  const name = document.createElement('h2');
+  name.className = 'inspector-name';
+  name.textContent = title;
+  heading.append(name);
+  const meta = document.createElement('div');
+  meta.className = 'inspector-years';
+  meta.textContent = eyebrow;
+  heading.append(meta);
+  return heading;
+}
+
+function createPartnershipSections(details, onSelectPerson) {
+  const sections = document.createElement('div');
+  sections.className = 'inspector-sections';
+  sections.append(createSection(
+    'Partners',
+    createPeopleLinks('People', details.partners, onSelectPerson)
+  ));
+  if (details.events.length) {
+    sections.append(createSection('Recorded events', createLifeEvents(details.events)));
+  }
+  if (details.children.length) {
+    sections.append(createSection(
+      'Children',
+      createPeopleLinks('Children', details.children, onSelectPerson),
+      { count: details.children.length }
+    ));
+  }
+  if (details.notes.length) {
+    sections.append(createSection('Notes', createNotes(details.notes), {
+      count: details.notes.length, disclosure: true, expanded: true
+    }));
+  }
+  if (details.sources.length) {
+    sections.append(createSection('Sources', createSources(details.sources), {
+      count: details.sources.length, disclosure: true
+    }));
+  }
+  if (details.media.length) {
+    sections.append(createSection('Media', createMedia(details.media), {
+      count: details.media.length, disclosure: true
+    }));
+  }
+  const recordFacts = [
+    ['GEDCOM family record', details.familyId],
+    details.record.uid && ['Persistent ID', details.record.uid],
+    details.record.changed && ['Last changed', details.record.changed]
+  ].filter(Boolean);
+  sections.append(createSection('Record details', createFactList(recordFacts), { disclosure: true }));
+  return sections;
+}
+
+function renderPartnershipPane({ element, graph, selection, dock, onDock, onClose, onSelectPerson }) {
+  const details = buildPartnershipDetails(graph, selection.familyId);
+  if (!details) return false;
+  const content = document.createElement('div');
+  content.className = 'inspector-content';
+  content.append(
+    createRelationshipHeading(details.title, 'Recorded partnership'),
+    createPartnershipSections(details, onSelectPerson)
+  );
+  element.replaceChildren(createTopbar(dock, onDock, onClose, 'Partnership details'), content);
+  return true;
+}
+
+function renderChildrenPane({ element, graph, selection, dock, onDock, onClose, onSelectPerson }) {
+  const details = buildChildrenDetails(graph, selection.familyId);
+  if (!details) return false;
+  const sections = document.createElement('div');
+  sections.className = 'inspector-sections';
+  sections.append(createSection(
+    'Parents or partners',
+    createPeopleLinks('People', details.partners, onSelectPerson)
+  ));
+  const childList = details.children.length
+    ? createPeopleLinks('Children', details.children, onSelectPerson)
+    : document.createTextNode('No children are recorded for this family.');
+  sections.append(createSection('Children', childList, { count: details.children.length }));
+  const content = document.createElement('div');
+  content.className = 'inspector-content';
+  content.append(createRelationshipHeading(details.title, 'Direct descendants'), sections);
+  element.replaceChildren(createTopbar(dock, onDock, onClose, 'Children'), content);
+  return true;
+}
+
+export function renderSelectionDetailsPane({
+  element, graph, selection, dock, onDock, onClose, onSelectPerson
+}) {
+  if (selection?.type === 'comparison') {
+    renderComparisonPane({ element, graph, selection, dock, onDock, onClose, onSelectPerson });
+    return;
+  }
+  if (selection?.type === 'partnership' && renderPartnershipPane({
+    element, graph, selection, dock, onDock, onClose, onSelectPerson
+  })) return;
+  if (selection?.type === 'children' && renderChildrenPane({
+    element, graph, selection, dock, onDock, onClose, onSelectPerson
+  })) return;
+  const personId = selection?.type === 'person' ? selection.personId : '';
   const person = graph.people[personId];
   if (!person) {
     const empty = document.createElement('div');
