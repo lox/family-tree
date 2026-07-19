@@ -1,4 +1,4 @@
-const SHARED_TREE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
+const SHARED_TREE_ID_PATTERN = /^(?:[A-Za-z0-9_-]{32}|[a-z0-9]{16})$/;
 
 export function sharedTreeIdFromPathname(pathname) {
   const match = String(pathname).match(/^\/t\/([^/]+)\/?$/);

@@ -7,11 +7,14 @@ import {
   sharedTreeIdFromPathname
 } from '../src/shared-tree.js';
 
-const treeId = 'Hq5m8A5Y6kYtKJQW2n4hSufg7ZB4cP9x';
+const treeId = 'k7m4q2v9c8r3w6jx';
+const legacyTreeId = 'Hq5m8A5Y6kYtKJQW2n4hSufg7ZB4cP9x';
 
 test('recognises only valid shared-tree paths', () => {
   assert.equal(sharedTreeIdFromPathname(`/t/${treeId}`), treeId);
   assert.equal(sharedTreeIdFromPathname(`/t/${treeId}/`), treeId);
+  assert.equal(sharedTreeIdFromPathname(`/t/${legacyTreeId}`), legacyTreeId);
+  assert.equal(sharedTreeIdFromPathname('/t/K7m4q2v9c8r3w6jx'), '');
   assert.equal(sharedTreeIdFromPathname('/t/short'), '');
   assert.equal(sharedTreeIdFromPathname(`/other/${treeId}`), '');
 });

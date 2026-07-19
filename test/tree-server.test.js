@@ -5,10 +5,11 @@ import net from 'node:net';
 import { gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
 
-import { createFamilyTreeServer } from '../server/app.js';
+import { createFamilyTreeServer, generateTreeId } from '../server/app.js';
 import { createMemoryTreeStorage } from '../server/memory-tree-storage.js';
 
-const treeId = 'Hq5m8A5Y6kYtKJQW2n4hSufg7ZB4cP9x';
+const treeId = 'k7m4q2v9c8r3w6jx';
+const legacyTreeId = 'Hq5m8A5Y6kYtKJQW2n4hSufg7ZB4cP9x';
 const gedcom = '0 HEAD\n1 GEDC\n2 VERS 5.5.1\n0 @I1@ INDI\n1 NAME Ada /Lovelace/\n0 TRLR\n';
 const gunzipAsync = promisify(gunzip);
 
@@ -24,6 +25,13 @@ async function withServer(options, callback) {
     await once(server, 'close');
   }
 }
+
+test('generates compact lowercase tree IDs with 80 bits of entropy', () => {
+  const id = generateTreeId(size => Buffer.alloc(size, 0));
+
+  assert.match(id, /^[a-z0-9]{16}$/);
+  assert.equal(id, '0000000000000000');
+});
 
 test('uploads and retrieves a compressed GEDCOM through the storage adapter', async () => {
   const storage = createMemoryTreeStorage();
@@ -67,6 +75,7 @@ test('rejects malformed, oversized, and invalid tree requests', async () => {
 
     assert.equal((await fetch(`${origin}/api/trees/short`)).status, 400);
     assert.equal((await fetch(`${origin}/api/trees/${treeId}`)).status, 404);
+    assert.equal((await fetch(`${origin}/api/trees/${legacyTreeId}`)).status, 404);
     assert.equal(storage.size, 0);
   });
 });
@@ -159,5 +168,6 @@ test('serves the application shell for shared-tree routes', async () => {
     const response = await fetch(`${origin}/t/${treeId}`);
     assert.equal(response.status, 200);
     assert.match(await response.text(), /Family Tree/);
+    assert.equal((await fetch(`${origin}/t/${legacyTreeId}`)).status, 200);
   });
 });
