@@ -1,7 +1,7 @@
 import { parseGedcom } from './gedcom-parser.js';
 import { parseGedcomSyntax as parseSyntax } from './gedcom-syntax.js';
 
-export const TREE_DOCUMENT_SCHEMA_VERSION = 1;
+export const TREE_DOCUMENT_SCHEMA_VERSION = 2;
 
 const copy = value => value == null ? value : structuredClone(value);
 
@@ -51,6 +51,70 @@ const childPathForTags = (syntax, parentPath, tags, occurrence) => {
 };
 
 const originWithPath = path => path ? { path } : undefined;
+
+const assertOnlyKeys = (value, allowed, label) => {
+  const unsupported = Object.keys(value ?? {}).filter(key => !allowed.has(key));
+  if (unsupported.length) throw new Error(`${label} contains unsupported ${unsupported.join(', ')}`);
+};
+
+const validatePartialDate = (value, label) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be a structured date`);
+  }
+  assertOnlyKeys(value, new Set(['year', 'month', 'day']), label);
+  if (!Number.isInteger(value.year)) throw new Error(`${label} year must be an integer`);
+  if (value.month != null && (!Number.isInteger(value.month) || value.month < 1 || value.month > 12)) {
+    throw new Error(`${label} month must be between 1 and 12`);
+  }
+  if (value.day != null && (!Number.isInteger(value.day) || value.day < 1 || value.day > 31)) {
+    throw new Error(`${label} day must be between 1 and 31`);
+  }
+};
+
+export const validateDateValue = (value, label = 'Date') => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  assertOnlyKeys(value, new Set(['original', 'interpretation']), label);
+  if (typeof value.original !== 'string') throw new Error(`${label} original must be text`);
+  if (!Object.hasOwn(value, 'interpretation')) return value;
+  const interpretation = value.interpretation;
+  if (typeof interpretation !== 'object' || Array.isArray(interpretation)) {
+    throw new Error(`${label} interpretation must be an object`);
+  }
+  assertOnlyKeys(interpretation, new Set(['kind', 'start', 'end', 'provenance']), `${label} interpretation`);
+  if (!new Set(['exact', 'approximate', 'before', 'after', 'range']).has(interpretation.kind)) {
+    throw new Error(`${label} interpretation kind is invalid`);
+  }
+  if (!new Set(['explicit', 'inferred']).has(interpretation.provenance)) {
+    throw new Error(`${label} interpretation provenance is invalid`);
+  }
+  validatePartialDate(interpretation.start, `${label} interpretation start`);
+  if (interpretation.kind === 'range') validatePartialDate(interpretation.end, `${label} interpretation end`);
+  else if (interpretation.end != null) throw new Error(`${label} interpretation end is only valid for a range`);
+  return value;
+};
+
+export const validatePlaceValue = (value, label = 'Place') => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object`);
+  assertOnlyKeys(value, new Set(['original', 'interpretation']), label);
+  if (typeof value.original !== 'string') throw new Error(`${label} original must be text`);
+  if (!Object.hasOwn(value, 'interpretation')) return value;
+  const interpretation = value.interpretation;
+  if (typeof interpretation !== 'object' || Array.isArray(interpretation)) {
+    throw new Error(`${label} interpretation must be an object`);
+  }
+  assertOnlyKeys(interpretation, new Set(['normalized', 'parts', 'provenance']), `${label} interpretation`);
+  if (typeof interpretation.normalized !== 'string') {
+    throw new Error(`${label} interpretation normalized must be text`);
+  }
+  if (interpretation.parts != null && (!Array.isArray(interpretation.parts)
+    || interpretation.parts.some(part => typeof part !== 'string'))) {
+    throw new Error(`${label} interpretation parts must be text values`);
+  }
+  if (!new Set(['explicit', 'inferred']).has(interpretation.provenance)) {
+    throw new Error(`${label} interpretation provenance is invalid`);
+  }
+  return value;
+};
 
 const assertMap = (document, key, label) => {
   if (!document[key] || Array.isArray(document[key]) || typeof document[key] !== 'object') {
@@ -128,7 +192,25 @@ export function validateTreeDocument(document) {
         if (!document.people[link.personId]) {
           throw new Error(`${family.id} references missing person ${link.personId}`);
         }
-        assertOrigin(link.origin, new Set(['path']), link.id);
+        assertOrigin(link.origin, new Set(['path', 'parentagePath']), link.id);
+        if (typeof link.order !== 'number' || !Number.isInteger(link.order) || link.order < 0) {
+          throw new Error(`${link.id} order must be a non-negative integer`);
+        }
+        if (typeof link.preferred !== 'boolean') throw new Error(`${link.id} preferred must be boolean`);
+        if (!new Set(['accepted', 'disputed']).has(link.status)) {
+          throw new Error(`${link.id} relationship status is invalid`);
+        }
+        if (!new Set(['explicit', 'inferred', 'uncertain', 'unknown']).has(link.certainty)) {
+          throw new Error(`${link.id} relationship certainty is invalid`);
+        }
+        if (collection === 'partnerLinks' && !new Set(['husband', 'wife', 'partner']).has(link.role)) {
+          throw new Error(`${link.id} partner role is invalid`);
+        }
+        if (collection === 'childLinks'
+          && !new Set(['biological', 'adoptive', 'foster', 'step', 'unknown']).has(link.parentage)) {
+          throw new Error(`${link.id} parentage is invalid`);
+        }
+        assertReferences(link, link.citationIds, document.citations, 'citation');
         const membership = `${link.personId}|${link.role ?? link.parentage ?? ''}`;
         if (memberships.has(membership)) {
           throw new Error(`${family.id} has duplicate ${collection} membership for ${link.personId}`);
@@ -146,6 +228,8 @@ export function validateTreeDocument(document) {
       throw new Error(`${event.id} is not linked from owner ${event.ownerId}`);
     }
     assertOrigin(event.origin, new Set(['path', 'datePath', 'placePath']), event.id);
+    validateDateValue(event.date, `${event.id} date`);
+    validatePlaceValue(event.place, `${event.id} place`);
     assertReferences(event, event.noteIds, document.notes, 'note');
     assertReferences(event, event.citationIds, document.citations, 'citation');
     assertReferences(event, event.mediaIds, document.media, 'media');
@@ -155,7 +239,16 @@ export function validateTreeDocument(document) {
     assertReferences(note, note.citationIds, document.citations, 'citation');
   });
   Object.values(document.citations).forEach(citation => {
+    assertOnlyKeys(citation, new Set(['id', 'sourceId', 'page', 'text', 'unresolved', 'origin']), citation.id);
     assertOrigin(citation.origin, new Set(['path']), citation.id);
+    if (typeof citation.page !== 'string') throw new Error(`${citation.id} citation page must be text`);
+    if (typeof citation.text !== 'string') throw new Error(`${citation.id} citation text must be text`);
+    if (Object.hasOwn(citation, 'unresolved') && typeof citation.unresolved !== 'boolean') {
+      throw new Error(`${citation.id} citation unresolved must be boolean`);
+    }
+    if (typeof citation.sourceId !== 'string' || !citation.sourceId) {
+      throw new Error(`${citation.id} must reference a source`);
+    }
     if (citation.sourceId && !document.sources[citation.sourceId] && !citation.unresolved) {
       throw new Error(`${citation.id} references missing source ${citation.sourceId}`);
     }
@@ -204,18 +297,30 @@ export function createTreeDocument(graph, {
     };
   });
 
-  const sequence = { event: 0, note: 0, citation: 0, media: 0 };
+  const sequence = { event: 0, note: 0, citation: 0, media: 0, source: 0 };
   const nextId = type => `${type}:${++sequence[type]}`;
 
   const addCitations = (citations, parentPath) => (citations ?? []).map((citation, index) => {
     const citationId = nextId('citation');
     const path = childPathFor(syntax, parentPath, 'SOUR', index);
+    let sourceId = citation.id ?? '';
+    if (!sourceId && citation.record) {
+      do sourceId = `source:inline:${++sequence.source}`;
+      while (document.sources[sourceId]);
+      document.sources[sourceId] = {
+        ...copy(citation.record),
+        id: sourceId,
+        importedId: citation.record.id ?? '',
+        importedInline: true,
+        ...(originWithPath(path) ? { origin: originWithPath(path) } : {})
+      };
+    }
     document.citations[citationId] = {
       id: citationId,
-      sourceId: citation.id ?? '',
+      sourceId,
       page: citation.page ?? '',
+      text: citation.text ?? '',
       ...(citation.id && !document.sources[citation.id] ? { unresolved: true } : {}),
-      ...(!citation.id && citation.record ? { inlineRecord: copy(citation.record) } : {}),
       ...(originWithPath(path) ? { origin: originWithPath(path) } : {})
     };
     return citationId;
@@ -328,17 +433,50 @@ export function createTreeDocument(graph, {
         personId,
         role,
         order: index,
+        preferred: false,
+        status: 'accepted',
+        certainty: importedTag ? 'explicit' : 'inferred',
+        citationIds: [],
         ...(originWithPath(linkPath) ? { origin: originWithPath(linkPath) } : {})
       };
     });
     const childLinks = family.children.map((personId, index) => {
       const linkPath = childPathFor(syntax, path, 'CHIL', index);
+      const personPath = recordPathFor(syntax, 'INDI', personId);
+      const membership = syntaxNodeAt(syntax, personPath)?.children?.find(node => (
+        node.tag === 'FAMC' && node.value?.match(/^@([^@]+)@$/)?.[1] === family.id
+      ));
+      const membershipIndex = membership
+        ? syntaxNodeAt(syntax, personPath).children.indexOf(membership)
+        : -1;
+      const membershipPath = membershipIndex >= 0 ? [...personPath, membershipIndex] : null;
+      const parentagePath = childPathFor(syntax, membershipPath, 'PEDI', 0);
+      const importedParentage = syntaxNodeAt(syntax, parentagePath)?.value?.trim().toLowerCase() ?? '';
+      const parentage = new Map([
+        ['birth', 'biological'], ['biological', 'biological'], ['natural', 'biological'],
+        ['adopted', 'adoptive'], ['adoptive', 'adoptive'], ['foster', 'foster'], ['step', 'step']
+      ]).get(importedParentage) ?? 'unknown';
+      const statusValue = childPathFor(syntax, membershipPath, 'STAT', 0);
+      const status = /challenged|disputed/i.test(syntaxNodeAt(syntax, statusValue)?.value ?? '')
+        ? 'disputed'
+        : 'accepted';
+      const preferredPath = childPathForTags(syntax, membershipPath, new Set(['PREF', '_PREF']), 0);
+      const preferred = /^(?:y|yes|true|1)$/i.test(syntaxNodeAt(syntax, preferredPath)?.value?.trim() ?? '');
       return {
         id: `${family.id}:child:${index}`,
         personId,
-        parentage: 'unknown',
+        parentage,
         order: index,
-        ...(originWithPath(linkPath) ? { origin: originWithPath(linkPath) } : {})
+        preferred,
+        status,
+        certainty: parentagePath ? 'explicit' : 'unknown',
+        citationIds: [],
+        ...((linkPath || parentagePath) ? {
+          origin: {
+            ...(linkPath ? { path: linkPath } : {}),
+            ...(parentagePath ? { parentagePath } : {})
+          }
+        } : {})
       };
     });
     document.families[family.id] = {
