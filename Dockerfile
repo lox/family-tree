@@ -10,7 +10,22 @@ RUN npm ci
 COPY index.html ./
 COPY src/ ./src/
 RUN npm run build
+RUN npm prune --omit=dev
 
-FROM nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
 
-COPY --from=build /app/dist/ /usr/share/nginx/html/
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+COPY --from=build /app/node_modules/ ./node_modules/
+COPY --from=build /app/dist/ ./dist/
+COPY server/ ./server/
+COPY package.json ./
+
+USER node
+
+EXPOSE 3000
+
+CMD ["node", "server/index.js"]

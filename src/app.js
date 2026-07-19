@@ -48,6 +48,11 @@ import {
   roundedPath,
   svgElement
 } from './svg-rendering.js';
+import {
+  loadSharedTree,
+  sharedTreeIdFromPathname
+} from './shared-tree.js';
+import { createShareControl } from './share-control.js';
 
 const svg = document.querySelector('#family-tree');
 const stage = document.querySelector('.tree-stage');
@@ -74,6 +79,7 @@ const searchClose = document.querySelector('#person-search-close');
 const searchMode = document.querySelector('#person-search-mode');
 const searchCompareAnchor = document.querySelector('#person-search-compare-anchor');
 const searchSubmitLabel = document.querySelector('#person-search-submit-label');
+const privacyNote = document.querySelector('.privacy-note');
 
 function loadPresentationSettings() {
   try {
@@ -85,12 +91,48 @@ function loadPresentationSettings() {
   }
 }
 
-let graph = parseGedcom(sampleGedcom);
-let importLabel = 'Kennedy sample';
-let selectedPersonId = 'I4';
-let selection = { type: 'person', personId: selectedPersonId };
+const initialSharedTreeId = sharedTreeIdFromPathname(window.location.pathname);
+const createShareSource = (text, filename) => new File(
+  [text],
+  filename,
+  { type: 'text/plain' }
+);
+let initialLoadError = null;
+let graph;
+let importLabel;
+let selectedPersonId;
+let shareSource = null;
+let sharedUrl = '';
+let privacyNotice = 'GED files stay in this browser.';
+
+if (initialSharedTreeId) {
+  try {
+    const sharedTree = await loadSharedTree(initialSharedTreeId);
+    graph = parseGedcom(sharedTree.text);
+    importLabel = sharedTree.filename;
+    selectedPersonId = '';
+    shareSource = createShareSource(sharedTree.text, sharedTree.filename);
+    sharedUrl = window.location.href;
+  } catch (error) {
+    initialLoadError = error;
+    graph = parseGedcom(sampleGedcom);
+    importLabel = 'Kennedy sample';
+    selectedPersonId = 'I4';
+    shareSource = createShareSource(sampleGedcom, 'kennedy-sample.ged');
+  }
+} else {
+  graph = parseGedcom(sampleGedcom);
+  importLabel = 'Kennedy sample';
+  selectedPersonId = 'I4';
+  shareSource = createShareSource(sampleGedcom, 'kennedy-sample.ged');
+}
+let selection = selectedPersonId
+  ? { type: 'person', personId: selectedPersonId }
+  : emptySelection();
 let relationshipFilter = createRelationshipFilter();
-let activeTreeId = crypto.randomUUID();
+let activeTreeId = initialSharedTreeId && !initialLoadError
+  ? initialSharedTreeId
+  : crypto.randomUUID();
 let recentPersonIds = selectedPersonId ? [selectedPersonId] : [];
 let inspectorState = createInspectorState({
   dock: defaultInspectorDock(window.innerWidth),
@@ -115,7 +157,8 @@ function cancelPendingPersonClick() {
 const relationshipFilterControl = createRelationshipFilterControl({
   root: document,
   workspace,
-  privacyNote: document.querySelector('.privacy-note'),
+  privacyNote,
+  getPrivacyNotice: () => privacyNotice,
   getPeople: () => graph.people,
   getSelectedPersonId: () => selectedPersonId,
   onChange: (nextFilter, { revealPersonId }) => {
@@ -126,10 +169,12 @@ const relationshipFilterControl = createRelationshipFilterControl({
   onOpen: () => setSettingsOpen(false)
 });
 
-function updateHistory(nextSelection, mode) {
+function updateHistory(nextSelection, mode, url = null) {
   if (mode === 'none') return;
   const method = mode === 'replace' ? 'replaceState' : 'pushState';
-  window.history[method](createSelectionHistoryState(activeTreeId, nextSelection), '');
+  const state = createSelectionHistoryState(activeTreeId, nextSelection);
+  if (url === null) window.history[method](state, '');
+  else window.history[method](state, '', url);
 }
 
 function revealPersonCard(personId, focus = true) {
@@ -859,6 +904,10 @@ fileInput.addEventListener('change', async () => {
   try {
     graph = parseGedcom(await file.text());
     importLabel = file.name;
+    shareSource = file;
+    sharedUrl = '';
+    privacyNotice = 'This GEDCOM stays in your browser unless you choose Share.';
+    errorMessage.hidden = true;
     selectedPersonId = '';
     selection = emptySelection();
     relationshipFilter = createRelationshipFilter();
@@ -866,7 +915,7 @@ fileInput.addEventListener('change', async () => {
     recentPersonIds = [];
     searchInput.placeholder = 'Find a person…';
     inspectorState = updateInspectorState(inspectorState, { type: 'deselect-person' });
-    updateHistory(selection, 'replace');
+    updateHistory(selection, 'replace', '/');
     renderImportReport();
     renderTree();
   } catch (error) {
@@ -874,6 +923,19 @@ fileInput.addEventListener('change', async () => {
     errorMessage.hidden = false;
   } finally {
     fileInput.value = '';
+  }
+});
+
+const shareControl = createShareControl({
+  root: document,
+  getSource: () => shareSource,
+  getUrl: () => sharedUrl,
+  onShared: result => {
+    sharedUrl = result.url;
+    activeTreeId = result.id;
+    updateHistory(selection, 'replace', new URL(result.url).pathname);
+    privacyNotice = 'Anyone with the public link can view this family tree.';
+    relationshipFilterControl.render(relationshipFilter);
   }
 });
 
@@ -954,6 +1016,7 @@ document.addEventListener('keydown', event => {
     return;
   }
   if (event.key !== 'Escape') return;
+  if (shareControl.isOpen()) return;
   if (personSearch.isOpen()) {
     event.preventDefault();
     personSearch.close({ restoreFocus: true });
@@ -997,3 +1060,11 @@ renderSettings();
 renderImportReport();
 renderTree();
 updateHistory(selection, 'replace');
+if (initialSharedTreeId && !initialLoadError) {
+  privacyNotice = 'This family tree is available to anyone with its public link.';
+  relationshipFilterControl.render(relationshipFilter);
+}
+if (initialLoadError) {
+  errorMessage.textContent = `${initialLoadError.message} Showing the Kennedy sample instead.`;
+  errorMessage.hidden = false;
+}

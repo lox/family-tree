@@ -9,7 +9,11 @@ npm ci
 npm run dev
 ```
 
-Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundled Kennedy sample opens by default; use **Open GEDCOM** to load another `.ged` file locally. GED data is parsed in the browser and is not uploaded.
+Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundled Kennedy sample opens by default; use **Import** to load another `.ged` file locally. GED data is parsed in the browser and is not uploaded unless **Share** is explicitly selected. Shared trees use an in-memory backend during local development and are cleared when the development server stops.
+
+Choose **Import** to open a local GEDCOM or **Share** to create a public, unguessable link for the current tree. Anyone with that link can view the tree; links are not password protected. Production uploads are compressed and stored in a private Tigris bucket.
+
+Uploads are limited to 100 MB and five attempts per client IP per hour. The Fly service also caps per-machine request concurrency so simultaneous multipart uploads cannot exhaust the 256 MB VM. Shared objects do not currently expire; configure a Tigris lifecycle policy before changing that retention behaviour.
 
 After a file opens, its import report shows the detected GEDCOM version and producer, record counts, malformed lines, unsupported tags, skipped duplicate records, and family links to missing people. Valid records still open when the file contains recoverable problems. The parser has compatibility fixtures for GEDCOM 5.5.1 Reunion exports and GEDCOM 7 partner records.
 
@@ -34,7 +38,13 @@ npm run benchmark
 
 ## Deploy
 
-The site is packaged as a small Nginx container and configured for Fly.io:
+Provision a private Tigris bucket for the Fly app once:
+
+```sh
+fly storage create -a lox-family-tree
+```
+
+Fly sets `BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and the S3 endpoint secrets on the app. The site is packaged with a small Node server that serves the built client and streams shared GEDCOM files to and from Tigris:
 
 ```sh
 fly deploy
@@ -56,6 +66,9 @@ fly deploy
 - `src/details-pane.js` owns the DOM presentation of people, partnerships, descendant groups, and relationship comparisons behind one rendering interface.
 - `src/svg-rendering.js` owns shared SVG element creation, rounded connection geometry, hit targets, and keyboard exposure for routed lines.
 - `src/app.js` composes the layout, SVG renderer, details pane, selection, resizing, settings, and file loading.
+- `src/shared-tree.js` recognises public tree URLs and owns shared-tree upload and download requests.
+- `server/app.js` serves the built application and exposes the GEDCOM upload and download API.
+- `server/tigris-tree-storage.js` compresses shared GEDCOM files into private Tigris object storage.
 - `src/sample.ged` is the default demonstration file and goes through the same parser as an opened GEDCOM.
 
 The engine projects the entire GEDCOM forest, including disconnected families and isolated individuals, into generation units. A unit has one anchor person and zero or more partners, so remarriages do not duplicate the anchor. It then measures those units, packs them into width-constrained generation bands, and places person cards. The connection router assigns clear vertical channels and shared family buses. Destination edges are valid route endpoints rather than false obstacles, and wrapped branches use continuous routed lines across bands. Selecting a person highlights their recorded ancestry and direct children while subduing unrelated context. Filtering removes out-of-scope people and keeps every remaining card at full contrast. The SVG renderer owns typography, colour, animation, and interaction; the engines own only deterministic geometry.
