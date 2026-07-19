@@ -97,6 +97,7 @@ h1 {
 .relationship-filter-trigger[aria-expanded="true"] { background: var(--surface-soft); }
 .file-control input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
 .share-trigger { cursor: pointer; }
+.file-control[hidden],
 .share-trigger[hidden] { display: none; }
 
 .settings-control { position: relative; }
