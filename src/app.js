@@ -1,10 +1,6 @@
 import { treeDocumentFromGedcom } from './tree-document.js';
 import { projectTreeDocument } from './tree-projection.js';
 import { parseGedcomSyntax } from './gedcom-syntax.js';
-import { exportGedcom } from './gedcom-export.js';
-import { applyTreeTransaction } from './tree-operations.js';
-import { createIndexedDbTreeStorage } from './tree-storage.js';
-import { createEditingControl } from './editing-control.js';
 import { buildFamilyLayout } from './layout-engine.js';
 import { cardNameBaselines, formatCardName } from './name-format.js';
 import {
@@ -88,10 +84,6 @@ const searchMode = document.querySelector('#person-search-mode');
 const searchCompareAnchor = document.querySelector('#person-search-compare-anchor');
 const searchSubmitLabel = document.querySelector('#person-search-submit-label');
 const privacyNote = document.querySelector('.privacy-note');
-const exportTrigger = document.querySelector('#export-trigger');
-
-const LAST_EDITED_TREE_KEY = 'family-tree:last-edited-document';
-const treeStorage = createIndexedDbTreeStorage();
 
 function loadPresentationSettings() {
   try {
@@ -117,7 +109,6 @@ let selectedPersonId;
 let shareSource = null;
 let sharedUrl = '';
 let privacyNotice = 'GED files stay in this browser.';
-let restoredLocalTree = false;
 
 function importTree(source, filename, id = crypto.randomUUID()) {
   return treeDocumentFromGedcom(source, {
@@ -132,47 +123,26 @@ function useTree(nextDocument) {
   graph = projectTreeDocument(treeDocument);
 }
 
-function exportedFile(document = treeDocument) {
-  const filename = (importLabel || 'family-tree.ged').replace(/\.[^.]+$/, '') || 'family-tree';
-  return createShareSource(exportGedcom(document), `${filename}.ged`);
-}
-
 if (initialSharedTreeId) {
   try {
     const sharedTree = await loadSharedTree(initialSharedTreeId);
     useTree(importTree(sharedTree.text, sharedTree.filename));
     importLabel = sharedTree.filename;
     selectedPersonId = '';
-    shareSource = exportedFile();
+    shareSource = createShareSource(sharedTree.text, sharedTree.filename);
     sharedUrl = window.location.href;
   } catch (error) {
     initialLoadError = error;
     useTree(importTree(sampleGedcom, 'kennedy-sample.ged'));
     importLabel = 'Kennedy sample';
     selectedPersonId = 'I4';
-    shareSource = exportedFile();
+    shareSource = createShareSource(sampleGedcom, 'kennedy-sample.ged');
   }
 } else {
-  let restored = null;
-  try {
-    const savedId = window.localStorage.getItem(LAST_EDITED_TREE_KEY);
-    if (savedId) restored = await treeStorage.load(savedId);
-  } catch (error) {
-    console.warn('The last edited tree could not be restored.', error);
-  }
-  if (restored) {
-    restoredLocalTree = true;
-    useTree(restored);
-    importLabel = restored.importMetadata?.filename || 'Locally edited tree';
-    selectedPersonId = '';
-    shareSource = exportedFile();
-    privacyNotice = 'Restored from this browser. Choose Share to create a public link.';
-  } else {
-    useTree(importTree(sampleGedcom, 'kennedy-sample.ged'));
-    importLabel = 'Kennedy sample';
-    selectedPersonId = 'I4';
-    shareSource = exportedFile();
-  }
+  useTree(importTree(sampleGedcom, 'kennedy-sample.ged'));
+  importLabel = 'Kennedy sample';
+  selectedPersonId = 'I4';
+  shareSource = createShareSource(sampleGedcom, 'kennedy-sample.ged');
 }
 let selection = selectedPersonId
   ? { type: 'person', personId: selectedPersonId }
@@ -184,7 +154,7 @@ let activeTreeId = initialSharedTreeId && !initialLoadError
 const treeActionControl = createTreeActionControl({
   fileControl,
   shareTrigger: document.querySelector('#share-trigger'),
-  initiallyShareable: Boolean((initialSharedTreeId && !initialLoadError) || restoredLocalTree)
+  initiallyShareable: Boolean(initialSharedTreeId && !initialLoadError)
 });
 let recentPersonIds = selectedPersonId ? [selectedPersonId] : [];
 let inspectorState = createInspectorState({
@@ -957,19 +927,12 @@ fileInput.addEventListener('change', async () => {
   try {
     useTree(importTree(await file.text(), file.name));
     importLabel = file.name;
-    shareSource = exportedFile();
-    try {
-      await treeStorage.save(treeDocument);
-      window.localStorage.setItem(LAST_EDITED_TREE_KEY, treeDocument.id);
-    } catch (error) {
-      console.warn('The imported tree could not be saved in this browser.', error);
-    }
+    shareSource = file;
     sharedUrl = '';
     privacyNotice = 'This GEDCOM stays in your browser unless you choose Share.';
     errorMessage.hidden = true;
     selectedPersonId = '';
     selection = emptySelection();
-    editingControl.clearUndo();
     relationshipFilter = createRelationshipFilter();
     activeTreeId = treeDocument.id;
     recentPersonIds = [];
@@ -984,56 +947,6 @@ fileInput.addEventListener('change', async () => {
     errorMessage.hidden = false;
   } finally {
     fileInput.value = '';
-  }
-});
-
-async function persistEditedTree() {
-  try {
-    await treeStorage.save(treeDocument);
-    window.localStorage.setItem(LAST_EDITED_TREE_KEY, treeDocument.id);
-    return true;
-  } catch (error) {
-    console.warn('The edited tree could not be saved in this browser.', error);
-    return false;
-  }
-}
-
-async function commitEdit(transaction) {
-  const applied = applyTreeTransaction(treeDocument, transaction);
-  const nextShareSource = exportedFile(applied.document);
-  useTree(applied.document);
-  shareSource = nextShareSource;
-  sharedUrl = '';
-  activeTreeId = treeDocument.id;
-  privacyNotice = 'Edited locally in this browser. Choose Share to create a new public link.';
-  treeActionControl.showShare();
-  updateHistory(selection, 'replace', '/');
-  const persisted = await persistEditedTree();
-  renderImportReport();
-  renderTree();
-  return { ...applied, persisted };
-}
-
-const editingControl = createEditingControl({
-  root: document,
-  getDocument: () => treeDocument,
-  getPersonId: () => selectedPersonId,
-  getPerson: () => graph.people[selectedPersonId] ?? null,
-  onCommit: commitEdit
-});
-
-exportTrigger.addEventListener('click', () => {
-  try {
-    const file = exportedFile();
-    const url = URL.createObjectURL(file);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = file.name;
-    link.click();
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    errorMessage.textContent = `Could not export this tree safely: ${error.message}`;
-    errorMessage.hidden = false;
   }
 });
 
@@ -1128,7 +1041,6 @@ document.addEventListener('keydown', event => {
   }
   if (event.key !== 'Escape') return;
   if (shareControl.isOpen()) return;
-  if (editingControl.isOpen()) return;
   if (personSearch.isOpen()) {
     event.preventDefault();
     personSearch.close({ restoreFocus: true });

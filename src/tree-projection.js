@@ -8,19 +8,21 @@ const cleanName = value => String(value ?? '')
 
 export function projectTreeDocument(document) {
   validateTreeDocument(document);
-  const sources = Object.fromEntries(Object.values(document.sources).map(source => {
-    const { origin, ...record } = source;
-    return [source.id, copy(record)];
-  }));
+  const projectSource = source => {
+    const { origin, importedId, importedInline, ...record } = source;
+    return { ...copy(record), id: importedId ?? record.id };
+  };
+  const sources = Object.fromEntries(Object.values(document.sources)
+    .filter(source => !source.importedInline)
+    .map(source => [source.id, projectSource(source)]));
 
   const projectCitation = citationId => {
     const citation = document.citations[citationId];
+    const source = document.sources[citation.sourceId];
     return {
-      id: citation.sourceId,
+      id: source?.importedId ?? citation.sourceId,
       page: citation.page,
-      record: citation.sourceId
-        ? sources[citation.sourceId] ?? null
-        : copy(citation.inlineRecord ?? null)
+      record: source ? projectSource(source) : null
     };
   };
   const projectCitations = ids => (ids ?? []).map(projectCitation);

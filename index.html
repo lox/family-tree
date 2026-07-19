@@ -70,7 +70,6 @@
           <span>Find</span>
           <kbd>⌘K</kbd>
         </button>
-        <button class="edit-trigger" id="edit-trigger" type="button" aria-haspopup="dialog" aria-controls="edit-dialog">Describe a change</button>
         <div class="settings-control">
           <button class="settings-trigger" id="settings-trigger" type="button" aria-expanded="false" aria-controls="settings-popover" aria-haspopup="dialog">
             <svg class="control-icon" viewBox="0 0 20 20" aria-hidden="true">
@@ -109,7 +108,6 @@
           <input id="ged-file" type="file" accept=".ged,text/plain">
         </label>
         <button class="share-trigger" id="share-trigger" type="button" hidden>Share</button>
-        <button class="export-trigger" id="export-trigger" type="button">Export GEDCOM</button>
       </div>
     </header>
 
@@ -121,22 +119,6 @@
       </details>
       <p class="privacy-note">Select a person to trace their relationship path. · Shift-click to compare two people. · Double-click for a family branch. · GED files stay in this browser.</p>
     </div>
-    <dialog class="edit-dialog" id="edit-dialog" aria-labelledby="edit-title">
-      <form class="edit-panel" id="edit-form">
-        <h2 id="edit-title">Describe a change</h2>
-        <p id="edit-context">Select a person, then describe what should change.</p>
-        <label for="edit-input">What do you know?</label>
-        <textarea id="edit-input" rows="4" placeholder="For example: Set birth date to about 1816"></textarea>
-        <p class="edit-status" id="edit-status" role="status" aria-live="polite"></p>
-        <section class="edit-preview" id="edit-preview" aria-label="Proposed change" hidden></section>
-        <footer>
-          <button id="edit-close" type="button">Close</button>
-          <button id="edit-undo" type="button" hidden>Undo last change</button>
-          <button id="edit-review" type="submit">Review change</button>
-          <button id="edit-apply" type="button" hidden>Apply change</button>
-        </footer>
-      </form>
-    </dialog>
     <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-title">
       <section class="share-panel">
         <h2 id="share-title">Share this family tree</h2>

@@ -1,4 +1,8 @@
-import { validateTreeDocument } from './tree-document.js';
+import {
+  validateDateValue,
+  validatePlaceValue,
+  validateTreeDocument
+} from './tree-document.js';
 
 const clone = value => structuredClone(value);
 
@@ -19,14 +23,6 @@ const describeValue = value => value?.original ?? value ?? '';
 const assertOnlyKeys = (value, allowed, label) => {
   const unsupported = Object.keys(value ?? {}).filter(key => !allowed.has(key));
   if (unsupported.length) throw new Error(`${label} cannot change ${unsupported.join(', ')}`);
-};
-
-const assertOriginalText = (value, label) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)
-    || Object.keys(value).some(key => key !== 'original')
-    || typeof value.original !== 'string') {
-    throw new Error(`${label} must contain only an original text value`);
-  }
 };
 
 function applyOperation(document, operation) {
@@ -55,8 +51,8 @@ function applyOperation(document, operation) {
       if (Object.hasOwn(changes, 'value') && typeof changes.value !== 'string') {
         throw new Error('An event value must be text');
       }
-      if (Object.hasOwn(changes, 'date')) assertOriginalText(changes.date, 'An event date');
-      if (Object.hasOwn(changes, 'place')) assertOriginalText(changes.place, 'An event place');
+      if (Object.hasOwn(changes, 'date')) validateDateValue(changes.date, 'An event date');
+      if (Object.hasOwn(changes, 'place')) validatePlaceValue(changes.place, 'An event place');
       const previous = {};
       Object.keys(changes).forEach(key => { previous[key] = clone(event[key]); });
       Object.assign(event, changes);
@@ -80,8 +76,8 @@ function applyOperation(document, operation) {
       ]), 'A new event');
       if (typeof event.tag !== 'string' || !event.tag) throw new Error('A new event tag is required');
       if (typeof event.value !== 'string') throw new Error('A new event value must be text');
-      assertOriginalText(event.date, 'A new event date');
-      assertOriginalText(event.place, 'A new event place');
+      validateDateValue(event.date, 'A new event date');
+      validatePlaceValue(event.place, 'A new event place');
       event.ownerType = operation.ownerType;
       event.ownerId = operation.ownerId;
       document.events[event.id] = event;

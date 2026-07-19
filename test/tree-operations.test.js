@@ -8,7 +8,7 @@ import {
 } from '../src/tree-operations.js';
 
 const document = () => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   id: 'tree-1',
   revision: 0,
   people: {
@@ -82,6 +82,38 @@ test('applies atomically and returns an inverse transaction for undo', () => {
   assert.equal(undone.document.notes['note-1'], undefined);
 });
 
+test('accepts validated optional date and place interpretations', () => {
+  const current = document();
+  const applied = applyTreeTransaction(current, {
+    id: 'structured', baseRevision: 0, provenance: { actor: 'user' },
+    operations: [{
+      type: 'event.update',
+      eventId: 'I1:event:0',
+      changes: {
+        date: {
+          original: 'ABT 1815',
+          interpretation: {
+            kind: 'approximate',
+            start: { year: 1815 },
+            provenance: 'explicit'
+          }
+        },
+        place: {
+          original: 'London',
+          interpretation: {
+            normalized: 'London, England, United Kingdom',
+            parts: ['London', 'England', 'United Kingdom'],
+            provenance: 'inferred'
+          }
+        }
+      }
+    }]
+  });
+
+  assert.equal(applied.document.events['I1:event:0'].date.interpretation.kind, 'approximate');
+  assert.equal(applied.document.events['I1:event:0'].place.interpretation.provenance, 'inferred');
+});
+
 test('rejects stale and partially invalid transactions without changing input', () => {
   const current = document();
   assert.throws(() => applyTreeTransaction(current, {
@@ -108,7 +140,7 @@ test('does not let generated event changes mutate identity or GEDCOM origins', (
     assert.throws(() => applyTreeTransaction(current, {
       id: 'unsafe', baseRevision: 0, provenance: {},
       operations: [{ type: 'event.update', eventId: 'I1:event:0', changes }]
-    }), /cannot change|must contain only/i);
+    }), /cannot change|must contain only|must be/i);
   }
   assert.deepEqual(current.events['I1:event:0'].origin, { path: [0, 0] });
 });

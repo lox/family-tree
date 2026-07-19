@@ -13,10 +13,6 @@ Open <http://127.0.0.1:4173/>. Vite reloads the page as files change. The bundle
 
 Choose **Import** to open a local GEDCOM, then **Share** to create a public, unguessable link for it. Clicking **Share** again shows the existing link. Anyone with that link can view the tree; links are not password protected. Production uploads are compressed and stored in a private Tigris bucket.
 
-Select a person and choose **Describe a change** to edit without navigating a form. The first conversational slice can change a primary name, birth date, or birth place, and add a note. The app translates the request into structured operations and shows an exact preview; nothing is committed until **Apply change** is selected. The most recent change can be undone during the current session. The latest edited tree is saved in IndexedDB and restored when the app is next opened without a public share link. Genealogical citations remain separate from the edit provenance that records the approved request.
-
-Choose **Export GEDCOM** to download the edited tree. An unchanged import is returned byte-for-byte. Edited exports patch the preserved GEDCOM syntax so unsupported and unmodelled data remains untouched. Files with malformed lines remain viewable but cannot be edited safely. Names with structured GEDCOM components also remain read-only in this first slice. Editing a publicly shared tree creates a local fork; choose **Share** again to publish a new immutable link.
-
 Uploads are limited to 100 MB and five attempts per client IP per hour. The Fly service also caps per-machine request concurrency so simultaneous multipart uploads cannot exhaust the 256 MB VM. Shared objects do not currently expire; configure a Tigris lifecycle policy before changing that retention behaviour.
 
 After a file opens, its import report shows the detected GEDCOM version and producer, record counts, malformed lines, unsupported tags, skipped duplicate records, and family links to missing people. Valid records still open when the file contains recoverable problems. The parser has compatibility fixtures for GEDCOM 5.5.1 Reunion exports and GEDCOM 7 partner records.
@@ -58,13 +54,10 @@ fly deploy
 
 - `src/gedcom-parser.js` converts GEDCOM 5.5, 5.5.1, and 7.0-style records into a normalized graph and reports recoverable import problems.
 - `src/gedcom-syntax.js` retains the original GEDCOM byte structure and stable syntax paths for lossless no-op export and narrow field patches.
-- `src/tree-document.js` imports the parser graph into the versioned canonical editing model with stable identities and validated references.
+- `src/tree-document.js` imports the parser graph into the versioned canonical model with stable identities, source references, structured date/place interpretations, and first-class relationship metadata.
 - `src/tree-projection.js` derives the existing read-only graph contract from the canonical document, including convenient birth, death, occupation, and family event fields.
 - `src/tree-operations.js` validates and atomically applies revision-checked operations while producing human-readable previews and inverse operations.
-- `src/conversation-editor.js` translates the supported conversational editing patterns into proposed operations without mutating the tree.
-- `src/editing-control.js` owns the proposal, approval, and single-session undo dialog while handing approved transactions back to the application session.
-- `src/tree-storage.js` persists the latest materialized document in IndexedDB while its compact edit log retains revision provenance without copying the imported GEDCOM for every edit.
-- `src/gedcom-export.js` overlays approved edits onto the preserved GEDCOM syntax and refuses unsafe edited exports.
+- `src/gedcom-export.js` proves supported document changes can be overlaid onto preserved GEDCOM syntax without discarding unknown imported structures.
 - `src/import-report.js` turns parser diagnostics into the concise report shown beside the tree summary.
 - `src/layout-engine.js` is a pure, DOM-independent forest projection and packing engine.
 - `src/connection-router.js` bundles one-to-many relationships, allocates obstacle-free channels, and emits trunks, rails, drops, junctions, or paired continuation portals.
