@@ -6,7 +6,7 @@ import { PassThrough, Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createGzip } from 'node:zlib';
 
-const TREE_ID_PATTERN = /^[A-Za-z0-9_-]{32}$/;
+const TREE_ID_PATTERN = /^(?:[A-Za-z0-9_-]{32}|[a-z0-9]{16})$/;
 const DEFAULT_MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 class RequestError extends Error {
@@ -129,10 +129,20 @@ function decodePathname(pathname) {
   }
 }
 
+export function generateTreeId(randomBytesImpl = randomBytes) {
+  const bytes = randomBytesImpl(10);
+  if (!Buffer.isBuffer(bytes) || bytes.length !== 10) {
+    throw new Error('The random byte generator returned an invalid value.');
+  }
+  return BigInt(`0x${bytes.toString('hex') || '0'}`)
+    .toString(36)
+    .padStart(16, '0');
+}
+
 export function createFamilyTreeServer({
   storage,
   distDir = resolve('dist'),
-  generateId = () => randomBytes(24).toString('base64url'),
+  generateId = generateTreeId,
   maxUploadBytes = DEFAULT_MAX_UPLOAD_BYTES,
   uploadRateLimit = 5,
   uploadRateWindowMs = 60 * 60 * 1000,
@@ -214,7 +224,8 @@ export function createFamilyTreeServer({
         response.writeHead(405).end();
         return;
       }
-      const isTreeRoute = /^\/t\/[A-Za-z0-9_-]{32}\/?$/.test(url.pathname);
+      const treeRouteId = url.pathname.match(/^\/t\/([^/]+)\/?$/)?.[1] || '';
+      const isTreeRoute = TREE_ID_PATTERN.test(treeRouteId);
       const requestedPath = isTreeRoute || url.pathname === '/'
         ? resolve(distDir, 'index.html')
         : resolve(distDir, `.${decodePathname(url.pathname)}`);
