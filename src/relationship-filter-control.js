@@ -5,7 +5,7 @@ import {
   relationshipFilterLabel
 } from './relationship-filter.js';
 
-const DEFAULT_NOTE = 'Select a person to trace their relationship path. · Double-click for a family branch. · GED files stay in this browser.';
+const DEFAULT_PRIVACY_NOTICE = 'GED files stay in this browser.';
 
 function requiredElement(root, selector) {
   const element = root.querySelector(selector);
@@ -20,6 +20,7 @@ export function createRelationshipFilterControl({
   root,
   workspace,
   privacyNote,
+  getPrivacyNotice = () => DEFAULT_PRIVACY_NOTICE,
   getPeople,
   getSelectedPersonId,
   onChange,
@@ -93,8 +94,8 @@ export function createRelationshipFilterControl({
     siblings.checked = filter.includeSiblings;
     descendantPartners.checked = filter.includeDescendantPartners;
     privacyNote.textContent = active && person
-      ? `${label} relative to ${person.name} · GED files stay in this browser.`
-      : DEFAULT_NOTE;
+      ? `${label} relative to ${person.name} · ${getPrivacyNotice()}`
+      : `Select a person to trace their relationship path. · Shift-click to compare two people. · Double-click for a family branch. · ${getPrivacyNotice()}`;
   }
 
   trigger.addEventListener('click', event => {

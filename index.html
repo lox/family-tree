@@ -104,9 +104,10 @@
           </section>
         </div>
         <label class="file-control">
-          <span>Open GEDCOM</span>
+          <span>Import</span>
           <input id="ged-file" type="file" accept=".ged,text/plain">
         </label>
+        <button class="share-trigger" id="share-trigger" type="button">Share</button>
       </div>
     </header>
 
@@ -118,6 +119,24 @@
       </details>
       <p class="privacy-note">Select a person to trace their relationship path. · Shift-click to compare two people. · Double-click for a family branch. · GED files stay in this browser.</p>
     </div>
+    <dialog class="share-dialog" id="share-dialog" aria-labelledby="share-title">
+      <section class="share-panel">
+        <h2 id="share-title">Share this family tree</h2>
+        <p>Anyone with the link will be able to view the people and details in this GEDCOM. The link is difficult to guess, but it is not password protected.</p>
+        <p class="share-status" id="share-status" role="alert" aria-live="polite"></p>
+        <div class="share-result" id="share-result" hidden>
+          <label for="share-url">Public link</label>
+          <div>
+            <input id="share-url" type="url" readonly>
+            <button id="share-copy" type="button">Copy</button>
+          </div>
+        </div>
+        <footer>
+          <button class="share-close" id="share-close" type="button">Close</button>
+          <button class="share-create" id="share-create" type="button">Create public link</button>
+        </footer>
+      </section>
+    </dialog>
     <dialog class="person-search-dialog" id="person-search-dialog" aria-labelledby="person-search-title">
       <section class="person-search-panel">
         <h2 class="visually-hidden" id="person-search-title">Find a person</h2>
