@@ -26,3 +26,16 @@ export function generationLaneBounds(bands, layoutHeight) {
     end: boundaries[index] ?? layoutHeight
   }));
 }
+
+export function generationLaneLabel({ generation, start }) {
+  return {
+    generation,
+    label: `Generation ${generation + 1}`,
+    x: 7,
+    y: start + 7,
+    width: 105,
+    height: 23,
+    textX: 12,
+    textY: start + 20
+  };
+}

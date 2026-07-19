@@ -4,9 +4,8 @@ import assert from 'node:assert/strict';
 import { projectFamilyForest } from '../src/layout-engine.js';
 import {
   ancestralEndpointIds,
-  computeRelationshipPath,
-  selectionAfterTreeClick,
-  toggleConnectionSelection
+  computeConnectionFocus,
+  computeRelationshipPath
 } from '../src/presentation-state.js';
 
 const people = Object.fromEntries('ABCDELM'.split('').map(id => [id, { id, name: id }]));
@@ -20,17 +19,22 @@ const graph = {
 };
 const projection = projectFamilyForest(graph);
 
-test('clears the selected person when the tree background is clicked', () => {
-  assert.equal(selectionAfterTreeClick('L'), 'L');
-  assert.equal(selectionAfterTreeClick(), '');
+test('focuses the two people connected by a selected partnership', () => {
+  const state = computeConnectionFocus(projection, { type: 'partnership', familyId: 'F1' });
+
+  assert.equal(state.active, true);
+  assert.deepEqual([...state.personIds], ['C', 'D']);
+  assert.deepEqual([...state.familyIds], ['F1']);
+  assert.ok(state.unitIds.has(projection.familyToUnit.F1));
 });
 
-test('toggles a routed connection without disturbing other emphasized lines', () => {
-  const first = toggleConnectionSelection(new Set(['child:F0']), 'union:F1');
-  const second = toggleConnectionSelection(first, 'child:F0');
+test('focuses parents and every direct child connected by a selected child branch', () => {
+  const state = computeConnectionFocus(projection, { type: 'children', familyId: 'F1' });
 
-  assert.deepEqual([...first], ['child:F0', 'union:F1']);
-  assert.deepEqual([...second], ['union:F1']);
+  assert.equal(state.active, true);
+  assert.deepEqual([...state.personIds], ['C', 'D', 'L']);
+  assert.deepEqual([...state.familyIds], ['F1']);
+  assert.ok(state.unitIds.has(projection.familyToUnit.F1));
 });
 
 test('identifies partnered people with no recorded parent family as ancestral endpoints', () => {
